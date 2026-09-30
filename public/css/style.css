@@ -4,6 +4,7 @@ body {
   text-align: center;
   padding: 50px;
 }
+
 main {
   max-width: 600px;
   margin: 0 auto;
@@ -11,10 +12,18 @@ main {
   background-color: white;
   border-radius: 10px;
 }
+
 h1 {
-  color: #333;
+  color: #010747;
 }
+
+p {
+  color: #010747;
+}
+
 button {
   padding: 10px 20px;
   cursor: pointer;
+  color: #002452;
+  background-color: rgba(223, 227, 230, 0.888);
 }
