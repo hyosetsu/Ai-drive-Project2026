@@ -6,9 +6,25 @@
 </head>
 <body>
   <h1>商品一覧</h1>
+
+
+  <!-- 新規登録画面へ遷移するリンク -->
+  <p>
+    <a href="/db-sample/new">新規商品登録</a>
+  </p>
+
+
   <ul>
     <% products.forEach((product) => { %>
-      <li><%= product.name %>：<%= product.price %>円</li>
+      <li>
+        <%= product.name %>：<%= product.price %>円
+
+
+        <!-- 削除ボタン（POSTメソッドなどでサーバーに送信する場合） -->
+        <form action="/db-sample/<%= product.id %>/delete" method="POST" style="display:inline;">
+          <button type="submit" onclick="return confirm('本当に削除しますか？');">削除</button>
+        </form>
+      </li>
     <% }) %>
   </ul>
 </body>
