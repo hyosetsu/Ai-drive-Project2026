@@ -401,3 +401,15 @@ export async function remove(
     });
   }
 }
+
+/**
+ * GET /todo
+ * TODO画面を表示する。
+ * TODOデータの取得はブラウザ側のTodoApiが行う。
+ */
+export function showPage(
+  _req: Request,
+  res: Response
+): void {
+  res.render('todo/index');
+}

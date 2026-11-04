@@ -1,8 +1,17 @@
 
 import express, { Router, Request, Response, NextFunction } from 'express';
-import { list, create, updateStatus, remove } from './todoController';
+import {
+  list,
+  create,
+  updateStatus,
+  remove,
+  showPage,
+} from './todoController';
 
 export const todoRouter = Router();
+
+// TODO画面
+todoRouter.get('/todo', showPage);
 
 // TODO APIのキャッシュを無効化する
 todoRouter.use('/api/v1/todos', (_req, res, next) => {
@@ -24,8 +33,6 @@ todoRouter.patch('/api/v1/todos/:id', updateStatus);
 
 // REQ-04: TODO削除
 todoRouter.delete('/api/v1/todos/:id', remove);
-
-// TODO: 工程09でGET /todoを追加する
 
 // 未定義のTODO APIへのアクセスはJSONで404を返す
 todoRouter.use('/api/v1/todos', (_req, res) => {
