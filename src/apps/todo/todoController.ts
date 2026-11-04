@@ -3,6 +3,7 @@ import {
   selectAllTodos,
   insertTodo,
   updateTodoStatus,
+  deleteTodo,
 } from './todoModel';
 
 /**
@@ -96,7 +97,7 @@ export function classifyDbError(error: unknown): 500 | 503 {
     '57P02',
     '57P03',
     '53300',
-    ]);
+  ]);
 
   return transientCodes.has(code) ? 503 : 500;
 }
@@ -146,21 +147,21 @@ export async function list(
  * TODOを新規登録する。
  */
 export async function create(
-    
   req: Request,
   res: Response
 ): Promise<void> {
-    // Content-TypeがJSONであることを確認
-    if (!req.is('application/json')) {
+  // Content-TypeがJSONであることを確認
+  if (!req.is('application/json')) {
     res.status(400).json({
-        success: false,
-        error: {
+      success: false,
+      error: {
         code: 'INVALID_BODY',
         message: 'Content-Typeはapplication/jsonを指定してください',
-        },
+      },
     });
     return;
-    }
+  }
+
   // JSON本文がオブジェクトであることを確認
   if (
     req.body === null ||
@@ -330,6 +331,72 @@ export async function updateStatus(
             ? 'SERVICE_UNAVAILABLE'
             : 'INTERNAL_SERVER_ERROR',
         message: 'TODOの完了状態を更新できませんでした',
+      },
+    });
+  }
+}
+
+/**
+ * DELETE /api/v1/todos/:id
+ * 指定したTODOを削除する。
+ */
+export async function remove(
+  req: Request,
+  res: Response
+): Promise<void> {
+  // ① URLパラメータのIDを検証
+  const id = parseId(req.params.id);
+
+  if (id === null) {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_PARAMETER',
+        message: '有効なTODO IDを指定してください',
+      },
+    });
+    return;
+  }
+
+  try {
+    // ② 指定したTODOを削除
+    const deleted = await deleteTodo(id);
+
+    // ③ 対象のTODOが存在しない場合
+    if (!deleted) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: '指定されたTODOが見つかりません',
+        },
+      });
+      return;
+    }
+
+    // ④ 削除成功時は本文なし
+    res.status(204).end();
+  } catch (error: unknown) {
+    // ⑤ DBエラーを500または503に分類
+    const status = classifyDbError(error);
+
+    console.error('TODO削除失敗', {
+      code:
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error
+          ? error.code
+          : undefined,
+    });
+
+    res.status(status).json({
+      success: false,
+      error: {
+        code:
+          status === 503
+            ? 'SERVICE_UNAVAILABLE'
+            : 'INTERNAL_SERVER_ERROR',
+        message: 'TODOを削除できませんでした',
       },
     });
   }

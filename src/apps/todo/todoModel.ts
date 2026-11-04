@@ -54,3 +54,18 @@ export async function updateTodoStatus(
 
   return result.rows[0] ?? null;
 }
+
+/**
+ * 指定したTODOを削除する。
+ * 削除できた場合はtrue、対象が存在しない場合はfalseを返す。
+ */
+export async function deleteTodo(id: number): Promise<boolean> {
+  const result = await pool.query<{ id: number }>(
+    `DELETE FROM todo_tasks
+     WHERE id = $1
+     RETURNING id`,
+    [id]
+  );
+
+  return result.rows.length > 0;
+}
