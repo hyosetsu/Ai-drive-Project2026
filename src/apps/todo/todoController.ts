@@ -1,3 +1,5 @@
+import type { Request, Response } from 'express';
+import { selectAllTodos } from './todoModel';
 
 /**
  * URLパラメータのTODO IDを検証する。
@@ -77,25 +79,60 @@ export function classifyDbError(error: unknown): 500 | 503 {
   }
 
   const transientCodes = new Set([
+    'ECONNREFUSED',
+    'ECONNRESET',
+    'ETIMEDOUT',
+    'EAI_AGAIN',
     '08000',
     '08001',
     '08003',
     '08004',
     '08006',
-    '08007',
-    '08P01',
     '57P01',
     '57P02',
     '57P03',
     '53300',
-    '53400',
-    'ENOTFOUND',
-    'EAI_AGAIN',
-    'ECONNREFUSED',
-    'ECONNRESET',
-    'ETIMEDOUT',
-    'EPIPE',
-  ]);
+    ]);
 
   return transientCodes.has(code) ? 503 : 500;
+}
+
+/**
+ * GET /api/v1/todos
+ * TODO一覧を取得する。
+ */
+export async function list(
+  _req: Request,
+  res: Response
+): Promise<void> {
+  try {
+    const todos = await selectAllTodos();
+
+    res.status(200).json({
+      success: true,
+      data: todos,
+    });
+  } catch (error: unknown) {
+    const status = classifyDbError(error);
+
+    console.error('TODO一覧取得失敗', {
+      code:
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error
+          ? error.code
+          : undefined,
+    });
+
+    res.status(status).json({
+      success: false,
+      error: {
+        code:
+          status === 503
+            ? 'SERVICE_UNAVAILABLE'
+            : 'INTERNAL_SERVER_ERROR',
+        message: 'TODO一覧を取得できませんでした',
+      },
+    });
+  }
 }

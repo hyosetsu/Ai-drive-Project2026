@@ -1,4 +1,5 @@
 import express, { Router, Request, Response, NextFunction } from 'express';
+import { list } from './todoController';
 
 export const todoRouter = Router();
 
@@ -11,7 +12,8 @@ todoRouter.use('/api/v1/todos', (_req, res, next) => {
 // TODO API専用のJSONパーサー（上限10KB）
 todoRouter.use('/api/v1/todos', express.json({ limit: '10kb' }));
 
-// TODO: 工程04CでGET /api/v1/todosを追加する
+// REQ-01: TODO一覧取得
+todoRouter.get('/api/v1/todos', list);
 // TODO: 工程05でPOST /api/v1/todosを追加する
 // TODO: 工程06でPATCH /api/v1/todos/:idを追加する
 // TODO: 工程07でDELETE /api/v1/todos/:idを追加する
