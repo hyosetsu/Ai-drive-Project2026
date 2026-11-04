@@ -20,3 +20,18 @@ export async function selectAllTodos(): Promise<TodoRow[]> {
 
   return result.rows;
 }
+
+/**
+ * TODOを新規登録する。
+ * titleはControllerで検証・trim済みの値を受け取る。
+ */
+export async function insertTodo(title: string): Promise<TodoRow> {
+  const result = await pool.query<TodoRow>(
+    `INSERT INTO todo_tasks (title)
+     VALUES ($1)
+     RETURNING id, title, is_completed AS completed, created_at`,
+    [title]
+  );
+
+  return result.rows[0];
+}

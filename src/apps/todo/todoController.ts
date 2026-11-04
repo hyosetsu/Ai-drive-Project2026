@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { selectAllTodos } from './todoModel';
+import { selectAllTodos, insertTodo } from './todoModel';
 
 /**
  * URLパラメータのTODO IDを検証する。
@@ -132,6 +132,89 @@ export async function list(
             ? 'SERVICE_UNAVAILABLE'
             : 'INTERNAL_SERVER_ERROR',
         message: 'TODO一覧を取得できませんでした',
+      },
+    });
+  }
+}
+
+/**
+ * POST /api/v1/todos
+ * TODOを新規登録する。
+ */
+export async function create(
+    
+  req: Request,
+  res: Response
+): Promise<void> {
+    // Content-TypeがJSONであることを確認
+    if (!req.is('application/json')) {
+    res.status(400).json({
+        success: false,
+        error: {
+        code: 'INVALID_BODY',
+        message: 'Content-Typeはapplication/jsonを指定してください',
+        },
+    });
+    return;
+    }
+  // JSON本文がオブジェクトであることを確認
+  if (
+    req.body === null ||
+    typeof req.body !== 'object' ||
+    Array.isArray(req.body)
+  ) {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_BODY',
+        message: 'JSONオブジェクトを指定してください',
+      },
+    });
+    return;
+  }
+
+  // titleの型・文字数・NUL文字を検証
+  const validation = validateTitle(req.body.title);
+
+  if (!validation.ok) {
+    res.status(validation.status).json({
+      success: false,
+      error: {
+        code: validation.code,
+        message: validation.message,
+      },
+    });
+    return;
+  }
+
+  try {
+    // 検証・trim済みのタイトルを登録
+    const todo = await insertTodo(validation.title);
+
+    res.status(201).json({
+      success: true,
+      data: todo,
+    });
+  } catch (error: unknown) {
+    const status = classifyDbError(error);
+
+    console.error('TODO登録失敗', {
+      code:
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error
+          ? error.code
+          : undefined,
+    });
+
+    res.status(status).json({
+      success: false,
+      error: {
+        code:
+          status === 503
+            ? 'SERVICE_UNAVAILABLE'
+            : 'INTERNAL_SERVER_ERROR',
+        message: 'TODOを登録できませんでした',
       },
     });
   }
