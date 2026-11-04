@@ -1,5 +1,9 @@
 import type { Request, Response } from 'express';
-import { selectAllTodos, insertTodo } from './todoModel';
+import {
+  selectAllTodos,
+  insertTodo,
+  updateTodoStatus,
+} from './todoModel';
 
 /**
  * URLパラメータのTODO IDを検証する。
@@ -215,6 +219,117 @@ export async function create(
             ? 'SERVICE_UNAVAILABLE'
             : 'INTERNAL_SERVER_ERROR',
         message: 'TODOを登録できませんでした',
+      },
+    });
+  }
+}
+
+/**
+ * PATCH /api/v1/todos/:id
+ * 指定したTODOの完了状態を更新する。
+ */
+export async function updateStatus(
+  req: Request,
+  res: Response
+): Promise<void> {
+  // ① URLパラメータのIDを検証
+  const id = parseId(req.params.id);
+
+  if (id === null) {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_PARAMETER',
+        message: '有効なTODO IDを指定してください',
+      },
+    });
+    return;
+  }
+
+  // ② Content-TypeがJSONであることを確認
+  if (!req.is('application/json')) {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_BODY',
+        message: 'Content-Typeはapplication/jsonを指定してください',
+      },
+    });
+    return;
+  }
+
+  // ③ JSON本文がオブジェクトであることを確認
+  if (
+    req.body === null ||
+    typeof req.body !== 'object' ||
+    Array.isArray(req.body)
+  ) {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_BODY',
+        message: 'JSONオブジェクトを指定してください',
+      },
+    });
+    return;
+  }
+
+  // ④ completedがboolean型であることを確認
+  const completed = req.body.completed;
+
+  if (typeof completed !== 'boolean') {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_BODY',
+        message: 'completedはtrueまたはfalseで指定してください',
+      },
+    });
+    return;
+  }
+
+  try {
+    // ⑤ 指定したTODOの完了状態を更新
+    const todo = await updateTodoStatus(id, completed);
+
+    // ⑥ 対象のTODOが存在しない場合
+    if (todo === null) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'NOT_FOUND',
+          message: '指定されたTODOが見つかりません',
+        },
+      });
+      return;
+    }
+
+    // ⑦ 更新成功
+    res.status(200).json({
+      success: true,
+      data: todo,
+    });
+  } catch (error: unknown) {
+    // ⑧ DBエラーを500または503に分類
+    const status = classifyDbError(error);
+
+    console.error('TODO完了状態更新失敗', {
+      code:
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error
+          ? error.code
+          : undefined,
+    });
+
+    res.status(status).json({
+      success: false,
+      error: {
+        code:
+          status === 503
+            ? 'SERVICE_UNAVAILABLE'
+            : 'INTERNAL_SERVER_ERROR',
+        message: 'TODOの完了状態を更新できませんでした',
       },
     });
   }

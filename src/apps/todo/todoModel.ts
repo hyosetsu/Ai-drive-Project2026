@@ -35,3 +35,22 @@ export async function insertTodo(title: string): Promise<TodoRow> {
 
   return result.rows[0];
 }
+
+/**
+ * 指定したTODOの完了状態だけを更新する。
+ * 対象IDが存在しない場合はnullを返す。
+ */
+export async function updateTodoStatus(
+  id: number,
+  completed: boolean
+): Promise<TodoRow | null> {
+  const result = await pool.query<TodoRow>(
+    `UPDATE todo_tasks
+     SET is_completed = $1
+     WHERE id = $2
+     RETURNING id, title, is_completed AS completed, created_at`,
+    [completed, id]
+  );
+
+  return result.rows[0] ?? null;
+}
