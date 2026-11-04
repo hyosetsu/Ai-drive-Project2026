@@ -1,0 +1,63 @@
+import express, { Router, Request, Response, NextFunction } from 'express';
+
+export const todoRouter = Router();
+
+// TODO APIのキャッシュを無効化する
+todoRouter.use('/api/v1/todos', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
+// TODO API専用のJSONパーサー（上限10KB）
+todoRouter.use('/api/v1/todos', express.json({ limit: '10kb' }));
+
+// TODO: 工程04CでGET /api/v1/todosを追加する
+// TODO: 工程05でPOST /api/v1/todosを追加する
+// TODO: 工程06でPATCH /api/v1/todos/:idを追加する
+// TODO: 工程07でDELETE /api/v1/todos/:idを追加する
+// TODO: 工程09でGET /todoを追加する
+
+// 未定義のTODO APIへのアクセスはJSONで404を返す
+todoRouter.use('/api/v1/todos', (_req, res) => {
+  res.status(404).json({
+    success: false,
+    error: {
+      code: 'NOT_FOUND',
+      message: '指定されたURLは存在しません',
+    },
+  });
+});
+
+// TODO APIのJSON解析エラーなどを処理する
+todoRouter.use(
+  '/api/v1/todos',
+  (err: any, _req: Request, res: Response, _next: NextFunction) => {
+    if (err?.type === 'entity.parse.failed') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_JSON',
+          message: 'JSONの形式が正しくありません',
+        },
+      });
+    }
+
+    if (err?.type === 'entity.too.large') {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'REQUEST_TOO_LARGE',
+          message: 'リクエストが大きすぎます',
+        },
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'サーバー内部エラーが発生しました',
+      },
+    });
+  },
+);
