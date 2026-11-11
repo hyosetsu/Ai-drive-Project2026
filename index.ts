@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import path from 'path';
 import { pool } from './db';
+import { todoRouter } from './src/apps/todo/todoRouter';
 
 const app = express(); // Expressアプリケーションを作成
 const port: number = 3000; // ローカルで使用するポート番号
@@ -96,6 +97,9 @@ app.post('/db-sample/:id/delete', async (req, res) => {
     res.status(500).send('商品の削除に失敗しました');
   }
 });
+
+// TODO Routerを登録
+app.use(todoRouter);
 
 // ------------------------------
 // サーバー起動
