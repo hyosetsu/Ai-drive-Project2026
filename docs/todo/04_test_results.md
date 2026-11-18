@@ -345,7 +345,7 @@ REQ-01〜REQ-04の主要な受け入れ条件と、ローカル環境で実施�
 | P03 | Gitのブランチ・コミット | Preview対象が明確で、Productionブランチへの直接pushではない | `feature/todo-app`、`29ccd7f`、`origin/feature/todo-app` と一致。`git status --short` は出力なし | PASS |
 | P04 | VercelのGit連携・Root Directory | 正しいリポジトリ・ディレクトリを参照 | 設定の直接確認記録なし | 未確認 |
 | P05 | Previewの環境変数 | `DATABASE_URL` 等の必要な変数名が設定済み | DB接続の成功は確認。設定画面での変数名確認記録なし | 一部確認 |
-| P06 | PreviewとProductionのDB接続先 | 設定方針を照合し、共有DBなら影響範囲を把握 | 接続先の照合結果未記録 | 未確認 |
+| P06 | PreviewとProductionのDB接続先 | PreviewとProductionが同一Neon DBを参照し、共有データへの影響を確認する | 接続先の照合結果未記録 | 未確認 |
 | P07 | Previewデプロイ | 対象コミットのデプロイが `Ready` | 稼働中のPreview画面・APIで正常動作報告あり。`Ready`表示とコミットの一致は未記録 | 一部確認 |
 
 ### 3. Preview画面・API・静的ファイル確認
@@ -368,10 +368,13 @@ REQ-01〜REQ-04の主要な受け入れ条件と、ローカル環境で実施�
 | ID | 操作・確認内容 | 期待結果 | 実測結果 | 判定 |
 |---|---|---|---|---|
 | P16 | GET `/api/v1/todos` | HTTP 200・`data` が配列 | 一覧取得成功（実施者報告） | PASS |
-| P17 | POST `/api/v1/todos` | HTTP 201・テストデータ登録 | 登録成功（実施者報告） | PASS |
-| P18 | PATCH `/api/v1/todos/:id` | HTTP 200・`completed` が変更される | 更新成功（実施者報告） | PASS |
+| P17 | POST `/api/v1/todos` の登録操作 | テストデータを登録できる | 登録操作成功（実施者報告） | PASS |
+| P17-H | POSTのHTTP仕様 | HTTP 201・成功JSONの形式が設計どおり | HTTPステータスとレスポンス本文の個別確認結果は未報告 | 未確認 |
+| P18 | PATCH `/api/v1/todos/:id` の更新操作 | `completed` を変更できる | 更新操作成功（実施者報告） | PASS |
+| P18-H | PATCHのHTTP仕様 | HTTP 200・更新後データを返す | HTTPステータスとレスポンス本文の個別確認結果は未報告 | 未確認 |
 | P19 | PATCH後の他列確認 | `title`・`created_at` が変化しない | Previewでの他列比較結果は未報告 | 未確認 |
-| P20 | DELETE `/api/v1/todos/:id` | HTTP 204・レスポンス本文なし | 削除成功（実施者報告） | PASS |
+| P20 | DELETE `/api/v1/todos/:id` の削除操作 | 自分のテストデータを削除できる | 削除操作成功（実施者報告） | PASS |
+| P20-H | DELETEのHTTP仕様 | HTTP 204・レスポンス本文なし（0文字） | HTTPステータスと本文長の個別確認結果は未報告 | 未確認 |
 | P21 | DELETE後のGET | 対象IDが取得結果に存在しない | Previewでの削除後の一覧比較結果は未報告 | 未確認 |
 
 - 使用したテストタイトル：未記録
@@ -379,7 +382,7 @@ REQ-01〜REQ-04の主要な受け入れ条件と、ローカル環境で実施�
 - テスト開始前の対象状態：未記録
 - テスト終了後の対象状態：未記録
 - 他レコードへの影響：未確認
-- HTTPステータス・レスポンス詳細：画面・API全体は正常との報告あり。POST/PATCH/DELETE個別の生ログは未添付
+- HTTPステータス・レスポンス詳細：操作成功は確認済み。ただし、POST 201・PATCH 200・DELETE 204およびDELETE本文0文字の個別確認結果は未報告のため、P17-H・P18-H・P20-Hは未確認とする。生ログの添付は必須ではない。
 
 ### 5. Previewブラウザ統合・回帰確認
 
@@ -429,7 +432,8 @@ REQ-01〜REQ-04の主要な受け入れ条件と、ローカル環境で実施�
 |---|---|
 | Git・ローカルビルド | **PASS** |
 | PreviewのTODO画面・静的ファイル | **PASS**（実施者報告） |
-| PreviewのTODO API（GET / POST / PATCH / DELETE） | **PASS**（実施者報告） |
+| PreviewのTODO API（GET / POST / PATCH / DELETE）の操作 | **PASS**（実施者報告） |
+| POST / PATCH / DELETEのHTTPステータス・レスポンス仕様 | 未確認（操作成功とは別判定） |
 | Neon PostgreSQL接続 | **PASS**（実施者報告） |
 | 既存機能の回帰テスト | **PASS**（実施者報告） |
 | PreviewデプロイのReady・コミット照合 | 未確認 |
@@ -437,7 +441,7 @@ REQ-01〜REQ-04の主要な受け入れ条件と、ローカル環境で実施�
 | テストデータの後片付け・DB残存確認 | 一部確認（削除操作は成功報告あり） |
 | 総合判定 | **PASS（報告された主要動作確認。未確認項目は上記のとおり）** |
 
-**工程11の主要動作確認は完了。** Vercel Preview上でTODO画面・静的ファイル・DB接続・CRUD操作・既存機能が正常に動作したとの報告を確認した。一方、PreviewデプロイのReady表示とコミットの照合、Preview/ProductionのDB接続先、操作ログやDBでの後片付けについては詳細を未記録として残す。未確認事項をPASS扱いしない。
+**工程11の主要動作確認は完了。** Vercel Preview上でTODO画面・静的ファイル・DB接続・CRUD操作・既存機能が正常に動作したとの報告を確認した。一方、POST/PATCH/DELETE個別のHTTPステータス・レスポンス仕様、PreviewデプロイのReady表示とコミットの照合、Preview/ProductionのDB接続先、操作ログやDBでの後片付けについては詳細を未記録として残す。未確認事項をPASS扱いしない。
 
 ### 10. 次工程
 
