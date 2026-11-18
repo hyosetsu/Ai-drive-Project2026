@@ -312,3 +312,181 @@ REQ-01〜REQ-04の主要な受け入れ条件と、ローカル環境で実施�
 - PreviewとProductionのDB接続先確認
 
 テストデータには `[TEST]` を付けた架空データのみを使用し、既存データを変更しない。
+
+---
+
+## 工程11：Vercel Previewでの動作確認
+
+> **記録状況：主要な動作確認完了（実施者報告）**  
+> 工程11の画面・API・回帰テストは正常動作が報告された。未提示の詳細情報は推測して記入せず「未記録」「未確認」とした。
+
+### 1. 実施情報
+
+| 項目 | 内容 |
+|---|---|
+| 実施日 | 2026年11月18日（結果報告日） |
+| 実施者 | 実施者本人 |
+| 実施環境 | Vercel Preview（実施者報告） |
+| Gitリポジトリ | `hyosetsu/Ai-drive-Project2026` |
+| 対象ブランチ | `feature/todo-app` |
+| ローカルで確認したコミット | `29ccd7f`（`origin/feature/todo-app` と一致） |
+| Vercelで実際にデプロイされたコミット | `29ccd7f32052600b4d974651754f734433b7d8b7`（指定PreviewデプロイのVercel情報から確認） |
+| Vercelプロジェクト | `ai-drive-project2026` |
+| Preview URL | `https://ai-drive-project2026-4jmx14tdv-hyosetsus-projects.vercel.app` |
+| デプロイステータス | `READY`（Vercelのデプロイ情報を確認） |
+| Neon接続先 | 接続成功を確認。Preview / Production間の接続先照合は未確認（接続文字列は記録しない） |
+
+### 2. デプロイ前の確認
+
+| ID | 確認項目 | 期待結果 | 実測結果 | 判定 |
+|---|---|---|---|---|
+| P01 | `npm run build` | ビルド成功 | `tsc` がエラーなく終了 | PASS |
+| P02 | `git diff --check` | エラーなし | 出力なし、エラーなし | PASS |
+| P03 | Gitのブランチ・コミット | Preview対象が明確で、Productionブランチへの直接pushではない | `feature/todo-app`、`29ccd7f`、`origin/feature/todo-app` と一致。`git status --short` は出力なし | PASS |
+| P04 | VercelのGit連携・Root Directory | 正しいリポジトリ・ディレクトリを参照 | 設定の直接確認記録なし | 未確認 |
+| P05 | Previewの環境変数 | `DATABASE_URL` 等の必要な変数名が設定済み | Vercelで `feature/todo-app` 向けPreviewの `DATABASE_URL` と `DATABASE_URL_POOLED` の登録を確認。値は取得・記録しない | PASS（変数名・適用対象） |
+| P06 | PreviewとProductionのDB接続先 | PreviewとProductionが同一Neon DBを参照し、共有データへの影響を確認する | PreviewとProductionに `DATABASE_URL` / `DATABASE_URL_POOLED` の設定がそれぞれ存在し、Neonに `production` ブランチが存在することを確認。両環境の接続先が同一かは検証できていない | 未確認（同一性） |
+| P07 | Previewデプロイ | 対象コミットのデプロイが `Ready` | 指定Previewデプロイが `READY`、Gitブランチ `feature/todo-app`、デプロイ済みコミット `29ccd7f` をVercel情報で照合。これは当時のPreviewデプロイであり、PR #5最新コミットとは異なる | PASS（指定デプロイ） |
+
+### 3. Preview画面・API・静的ファイル確認
+
+| ID | パス | 期待結果 | 実測結果 | 判定 |
+|---|---|---|---|---|
+| P08 | `/` | HTTP 200・TOPページ表示 | 正常動作（実施者報告） | PASS |
+| P09 | `/api/db-check` | HTTP 200・DB接続成功 | 正常動作・DB接続成功（実施者報告） | PASS |
+| P10 | `/api/v1/todos` の一覧取得操作 | TODO一覧を取得できる | 一覧取得成功（実施者報告） | PASS |
+| P10-H | `/api/v1/todos` のHTTP仕様 | HTTP 200・成功JSONの `data` が配列 | ブラウザNetworkでGET 200 OK、`content-type: application/json; charset=utf-8`、本文が `success: true`・`data` 配列（9件）と確認 | PASS |
+| P11 | `/todo` | 想定どおりのリダイレクトまたは画面表示 | このパス単独の結果は未報告 | 未確認 |
+| P12 | `/todo/` | HTTP 200・TODO画面表示 | HTTP 200・画面正常表示（実施者報告） | PASS |
+| P13 | `/todo/todo.js` | HTTP 200・JavaScript配信 | HTTP 200（実施者報告） | PASS |
+| P14 | `/todo/todo.css` | HTTP 200・CSS配信 | HTTP 200（実施者報告） | PASS |
+| P15 | `/db-sample` | HTTP 200・既存商品一覧表示 | 正常動作（実施者報告） | PASS |
+
+### 4. PreviewでのTODO CRUDテスト
+
+テストデータは `[TEST]` を付けた架空データに限定し、既存レコードの更新・削除を避ける。実測詳細が報告されていない項目については、成功した操作と区別して記録する。
+
+| ID | 操作・確認内容 | 期待結果 | 実測結果 | 判定 |
+|---|---|---|---|---|
+| P16 | GET `/api/v1/todos` の一覧取得操作 | TODO一覧を取得できる | 一覧取得成功（実施者報告） | PASS |
+| P16-H | GETのHTTP仕様 | HTTP 200・成功JSONの `data` が配列 | ブラウザNetworkでGET 200 OK、レスポンス本文の `success: true` と `data` 配列（9件）を確認 | PASS |
+| P17 | POST `/api/v1/todos` の登録操作 | テストデータを登録できる | 登録操作成功（実施者報告） | PASS |
+| P17-H | POSTのHTTP仕様 | HTTP 201・成功JSONの形式が設計どおり | 2026-11-18 05:22:10 UTC、POST `/api/v1/todos` が `201 Created`、`Content-Type: application/json; charset=utf-8`、`Content-Length: 111`。ResponseのJSON本文詳細は未提示 | 一部確認（201・JSONヘッダーはPASS） |
+| P18 | PATCH `/api/v1/todos/:id` の更新操作 | `completed` を変更できる | 更新操作成功（実施者報告） | PASS |
+| P18-H | PATCHのHTTP仕様 | HTTP 200・更新後データを返す | 2026-11-18 05:22:56 UTC、PATCH `/api/v1/todos/20` が `200 OK`、`Content-Type: application/json; charset=utf-8`、`Content-Length: 111`。Responseの更新後JSON詳細は未提示 | 一部確認（200・JSONヘッダーはPASS） |
+| P19 | PATCH後の他列確認 | `title`・`created_at` が変化しない | Previewでの他列比較結果は未報告 | 未確認 |
+| P20 | DELETE `/api/v1/todos/:id` の削除操作 | 自分のテストデータを削除できる | 削除操作成功（実施者報告） | PASS |
+| P20-H | DELETEのHTTP仕様 | HTTP 204・レスポンス本文なし（0文字） | DELETE `/api/v1/todos/20` が05:23:02 UTCに204、別のテストID `/api/v1/todos/21` が05:25:38 UTCに `204 No Content`。いずれも `Content-Type`・`Content-Length` なし。204はHTTP仕様上本文を持たない。NetworkのResponse欄で0文字を直接計測した記録はなし | PASS（204・本文なしのHTTP仕様と整合） |
+| P21 | DELETE後のGET | 対象IDが取得結果に存在しない | Previewでの削除後の一覧比較結果は未報告 | 未確認 |
+
+- 使用したテストタイトル：未記録
+- 登録されたテストID：未記録
+- テスト開始前の対象状態：未記録
+- テスト終了後の対象状態：未記録
+- 他レコードへの影響：未確認
+- HTTPステータス・レスポンス詳細：GETは200・成功JSON・`data` 配列（9件）を確認し、P10-H・P16-HをPASS。POST 201とPATCH 200のステータス・JSONヘッダーは確認済みだがResponse本文は未提示のため、P17-H・P18-Hは「一部確認」。DELETEはID 20・21で204と本文なしのHTTP仕様に整合するヘッダーを確認したためP20-HはPASS（Response欄での独立したバイト数計測は未記録）。
+
+### 4.1 GET APIの追加証跡（2026年11月18日）
+
+実施者がブラウザのNetwork情報とレスポンス本文を提示したため、P10-H・P16-Hの「未確認」をPASSに更新した。
+
+| 確認項目 | 実測結果 |
+|---|---|
+| Request URL | `https://ai-drive-project2026-4jmx14tdv-hyosetsus-projects.vercel.app/api/v1/todos` |
+| Request Method | GET |
+| Status Code | 200 OK |
+| Response Content-Type | `application/json; charset=utf-8` |
+| Cache-Control | `no-store` |
+| Response JSON | `success: true`、`data` は9件の配列 |
+| 各TODOの項目 | `id`、`title`、`completed`、`created_at` を確認 |
+| 判定 | **PASS**（GETのHTTP仕様とJSON形式） |
+
+※ レスポンスには既存のテストレコードなどが含まれるが、ここでは全件を転記しない。提示されたRequest URLはGETの証跡であり、PRの最新コミットに対応するデプロイかどうかは別途照合が必要。
+
+※ リクエストヘッダーに含まれた認証Cookie・セッショントークンなどの値は、機密情報として本書には保存しない。
+
+### 4.2 POST・PATCH・DELETEの追加HTTP証跡（2026年11月18日）
+
+実施者がChromeのNetworkからリクエスト・応答ヘッダーを提示した。以下は**提示された実測情報のみ**を要約し、認証Cookie・セッション値は転記しない。時刻はレスポンスのDateヘッダー（UTC）。
+
+| 操作 | 対象パス | 時刻（UTC） | 確認したHTTP応答 | 本文仕様の確認 |
+|---|---|---|---|---|
+| POST | `/api/v1/todos` | 05:22:10 | `201 Created`、JSON Content-Type、Content-Length 111 | Response JSONのフィールドと内容は未提示 |
+| PATCH | `/api/v1/todos/20` | 05:22:56 | `200 OK`、JSON Content-Type、Content-Length 111 | 更新後の `completed` 等のResponse JSONは未提示 |
+| DELETE | `/api/v1/todos/20` | 05:23:02 | `204 No Content`、Content-Type/Lengthなし | 204はHTTP仕様上本文なし。Responseタブでの0文字独立計測は未記録 |
+| DELETE | `/api/v1/todos/21` | 05:25:38 | `204 No Content`、Content-Type/Lengthなし | 別IDでも同様の仕様を確認。Responseタブでの0文字独立計測は未記録 |
+
+補足：PATCH付近で取得されたGET 200のログは、PATCH自体の200の証拠として扱わない。POST・PATCHについては、ヘッダーの `application/json` は確認済みだが、**JSON本文の具体的なフィールドや値は未検証**。また、テスト対象ID 20・21以外のレコードの状態はこのログだけでは判定しない。
+
+### 4.3 Vercel・Neon設定確認（2026年11月18日）
+
+- 指定Previewデプロイ `4WxqhdQiEtVcqoB5ep9QBYaXEP2m` は `READY`、対象ブランチは `feature/todo-app`、デプロイコミットは `29ccd7f` と確認した。
+- VercelにPreviewブランチ用とProduction用それぞれの `DATABASE_URL` / `DATABASE_URL_POOLED` が登録されていることを確認した（**値は参照・記録しない**）。
+- Neonプロジェクト `hidden-lab-27804034` に `production` ブランチ（ID `br-plain-hat-b3rc3a1c`）が存在することを確認した。
+- **双方が同じDBを参照しているかは未確認**。変数名の存在とNeonブランチの存在だけでは同一性は証明できないため、P06は未確認とする。
+
+### 5. Previewブラウザ統合・回帰確認
+
+| ID | 確認項目 | 期待結果 | 実測結果 | 判定 |
+|---|---|---|---|---|
+| P22 | TODO画面とCSSの表示 | レイアウトが正常 | 正常動作（実施者報告） | PASS |
+| P23 | ブラウザから登録 | POST成功・一覧更新 | 登録操作成功（実施者報告。Networkログなし） | PASS |
+| P24 | ブラウザから完了切替 | PATCH成功・状態反映 | 更新操作成功（実施者報告。Networkログなし） | PASS |
+| P25 | ブラウザから削除 | DELETE成功・一覧更新 | 削除操作成功（実施者報告。Networkログなし） | PASS |
+| P26 | ブラウザConsole / Network | 想定外のエラーなし | Console / Networkの詳細結果は未報告 | 未確認 |
+| P27 | 既存TOP・DBチェック・商品一覧 | 工程10時点と同様に動作 | いずれも正常動作（実施者報告） | PASS |
+
+### 6. DB接続・データ保護の確認
+
+- PreviewのDB接続：**PASS**（`/api/db-check` の正常動作を実施者が確認）
+- Preview / ProductionのDB共有状況：**未確認**（設定値を公開せず、Vercel / Neonの設定画面で照合する）
+- DB設定値や認証情報を本文に記録していないこと：**確認済み**（本書に接続文字列等は記載しない）
+- テスト用レコードの削除：**操作成功の報告あり**（対象ID・DBでの残存確認は未記録）
+- 他ユーザー・既存レコードを変更していないこと：**未確認**
+- SQLでの確認結果：**未記録**
+
+### 7. 不具合・対処
+
+| 項目 | 記録 |
+|---|---|
+| 発生した不具合 | 今回報告された動作確認項目では不具合なし |
+| 発生条件・HTTPステータス | 該当なし（詳細ログ未添付） |
+| 原因 | 該当なし |
+| 対処内容 | 追加の修正報告なし |
+| 再テスト結果 | 該当なし |
+
+### 8. 証跡
+
+| 種類 | 記録 |
+|---|---|
+| ローカルのGit状態・ビルド結果 | PowerShell出力をチャット上で確認済み |
+| Vercelデプロイの状態・コミット | 指定デプロイについてVercelのREADY・`29ccd7f`を確認。PRの最新コミットとは別 |
+| Vercel Build Logs（機密情報を除く） | 未添付 |
+| PreviewのHTTP・CRUD実行ログ | GET 200・成功JSON・data配列、POST 201、PATCH 200、DELETE 204（ID20・21）のNetwork情報を実施者がチャットで提示。POST/PATCHのResponse本文は未提示 |
+| ブラウザNetwork / Console | GET/POST/PATCH/DELETEの関連Network情報を提示済み。Console全体の詳細確認は未記録 |
+| TODO画面のスクリーンショット | 未添付 |
+| NeonのDB確認結果（機密情報を除く） | 未添付 |
+
+### 9. 工程11の最終判定
+
+| 区分 | 判定 |
+|---|---|
+| Git・ローカルビルド | **PASS** |
+| PreviewのTODO画面・静的ファイル | **PASS**（実施者報告） |
+| PreviewのTODO API（GET / POST / PATCH / DELETE）の操作 | **PASS**（実施者報告） |
+| GETのHTTPステータス・レスポンス仕様 | **PASS**（GET 200、成功JSON、`data` 配列を確認） |
+| POST / PATCHのHTTPステータス | **PASS**（POST 201・PATCH 200） |
+| POST / PATCHのJSON本文詳細 | 一部確認（JSONヘッダーのみ確認。本文フィールド未提示） |
+| DELETEのHTTPステータス・本文なしの仕様 | **PASS**（ID20・21で204。Response欄の独立した0文字計測は未記録） |
+| Neon PostgreSQL接続 | **PASS**（実施者報告） |
+| 既存機能の回帰テスト | **PASS**（実施者報告） |
+| 指定PreviewデプロイのReady・コミット照合 | **PASS**（READY、`29ccd7f`。PR最新コミットとの一致は対象外） |
+| Preview / ProductionのDB接続先照合 | 未確認 |
+| テストデータの後片付け・DB残存確認 | 一部確認（削除操作は成功報告あり） |
+| 総合判定 | **PASS（報告された主要動作確認。未確認項目は上記のとおり）** |
+
+**工程11の主要動作確認は完了。** GETは200と成功JSON・`data` 配列、POSTは201、PATCHは200、DELETEは204を実施者提示のNetwork記録から確認した。指定PreviewデプロイのREADYとコミット`29ccd7f`も照合済み。一方、POST/PATCHのResponse JSON詳細、Preview/ProductionのDB接続先の同一性、DBでの後片付けは確認が残っている。未確認事項はPASS扱いしない。
+
+### 10. 次工程
+
+工程12の内容は `docs/todo/03_implementation_plan.md` を確認してから着手する。Productionへの公開や既存DBへの変更は、本記録のPASS判定だけを根拠に実行しない。
