@@ -2,9 +2,13 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { pool } from './db';
 import { todoRouter } from './src/apps/todo/todoRouter';
+import { aiRouter } from './src/apps/ai/aiRouter';
 
 const app = express(); // Expressアプリケーションを作成
 const port: number = 3000; // ローカルで使用するポート番号
+
+// AI APIは既存の本文解析・静的配信より前に登録する。
+app.use('/api/ai', aiRouter);
 
 // ------------------------------
 // Expressの基本設定
