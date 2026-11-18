@@ -139,3 +139,39 @@ GitHubの`feature/ai-app`において、着手前の`index.ts`にはAI Router登
 - 既存データ削除、TRUNCATE、DROP、表の再作成を本記録作成時には行っていない。
 - 記録作成に伴うDB操作、環境変数変更、デプロイ操作は実施していない。
 - TASK-03以降の実装は行っていない。
+
+
+---
+
+## TASK-03：履歴取得API（実装状態の確認・記録）
+
+- 対象ブランチ：`feature/ai-app`
+- 対応要件：`REQ-AI-F007`／`F008`／`F009`／`D002`／`D003`／`D004`／`N001`
+- 対応設計：`DES-AI-001`／`002`／`004`／`005`／`006`
+- 実装状況：**TASK-02で実装済みだった履歴取得処理を再利用**。本工程では重複実装・新しいAPI・DB更新を行わず、`aiRouter.ts`の工程説明コメントだけを更新した。
+- 仕様差分：現行のHTTP成功形は、この開発で後から指定された`{ "success": true, "items": [] }`を採用。古い`spec.md`や`tasks.md`に残る`data: []`とは異なる。Modelの公開項目は`id`（文字列）、`prompt`、`response`、`createdAt`。
+- `@google/genai`：開発者からローカルで`npm install @google/genai`実施済みと報告あり。ただし、この工程ではGemini APIを呼び出さない。GitHub側の`package.json`では、確認時点で同SDKの依存記載は未確認。インストール後のローカル差分やビルドは本工程で実測していない。
+
+### 現状のコード確認
+
+| 項目 | 実装と確認内容 | 判定 |
+| --- | --- | --- |
+| デモ停止を優先 | `aiRouter`がゲートの後で`GET /history`を登録 | **静的確認済み** |
+| 固定SELECT | `ORDER BY created_at DESC, id DESC LIMIT 20` | **静的確認済み** |
+| 0件の成功応答 | `200`、`success:true`、`items:[]` | **TASK-02でHTTP実測済み** |
+| DB→公開項目 | `id/prompt/response/createdAt`への変換、日時はISO、IDは文字列 | **コード静的確認済み／非空のHTTP応答は未検証** |
+| DB障害時 | 500/503 `HISTORY_UNAVAILABLE`、0件成功へフォールバックしない | **コード静的確認済み／故障試験未実施** |
+| 停止時 | HTTP 503 `DEMO_DISABLED` | **TASK-02でHTTP実測済み** |
+| TOP・TODO回帰 | 画面・CRUDの正常動作 | **TASK-02で操作報告済み** |
+
+### TASK-03で未実施の試験
+
+1. 実DBに21件以上のテスト履歴を用意し、HTTP経由で最新20件・同時刻ID降順を確認する試験。TASK-02でのWITH句25件はSQL順序確認のみであり、HTTP統合試験とは区別する。
+2. 非空履歴に対する公開JSONの`id`文字列、`prompt`、`response`、`createdAt`の実測。安全整数上限を超えるIDも未試験。
+3. DBが利用不能な場合に`HISTORY_UNAVAILABLE`を返し、`items: []`で成功させない故障試験。
+4. 停止ゲートでDB SELECTが0回であることのスパイ計測。
+5. 本工程の変更取得後の`npm run build`、TODOを含む追加回帰。
+
+**判定：TASK-03の機能は実装済み。既存のTASK-02で確認した空履歴・停止時応答は合格。非空履歴の順序、公開項目変換、DB障害などのTASK-03受入試験は未完了。**
+
+DBへのSQL実行、データ追加・削除、環境変数登録、公開設定の変更は行っていない。TASK-04（模擬回答保存）・TASK-05（Gemini接続）は未着手。
