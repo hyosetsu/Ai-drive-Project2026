@@ -93,18 +93,49 @@ GitHubの`feature/ai-app`において、着手前の`index.ts`にはAI Router登
 - 更新：`src/apps/ai/aiError.ts`（HISTORY_UNAVAILABLEを追加）
 - 変更していない：`db.ts`、`index.ts`、既存TODO、環境変数、デプロイ設定
 
-### 試験結果・未実施
+### 試験結果（2026-11-18、開発者から提示された実測／操作報告）
 
-| 試験 | 確認方法・期待値 | 実測 | 状態 |
-| --- | --- | --- | --- |
-| TASK02-STATIC-01 | GitHubで5ファイルを再取得し、新旧ファイルが反映されたこと | 5ファイルの取得を確認 | 静的確認済み |
-| TASK02-BUILD | `npm run build` で型エラーなし | 未実行（利用者ローカル環境で実施要） | **未実施** |
-| TASK02-DB-01 | 対象DBを事前照会して既存ai_qa_logs表・列・制約・索引を確認 | DB接続・照会なし | **未実施** |
-| TASK02-DB-02 | 安全な試験用DBでCREATE適用後に定義と制約を照会 | SQLファイル生成のみ、未適用 | **未実施** |
-| TASK02-API-01 | 許可したローカル環境の空表からHTTP 200 `{success:true,items:[]}` | HTTP実行なし | **未実施** |
-| TASK02-API-02 | 21件以上・同日時で最新20件、created_at DESC/id DESC、id文字列を確認 | テストデータ投入・HTTP実行なし | **未実施** |
-| TASK02-API-03 | 停止状態でGET履歴503 DEMO_DISABLED、DB問い合わせなし | 変更後のHTTP実行なし | **未実施** |
-| TASK02-API-04 | DB障害でHISTORY_UNAVAILABLE、成功空配列にはしない | 故障注入なし | **未実施** |
-| TASK02-REG-01 | TOP/TODOの表示、CRUD、TODO JSON 10KB挙動を回帰確認 | 変更後の動作確認なし | **未実施** |
+| 試験ID | 条件・確認方法 | 期待結果 | 報告された実結果 | 判定 |
+| --- | --- | --- | --- | --- |
+| TASK02-STATIC-01 | GitHubでTASK-02の変更5ファイルを再取得 | SQL、Model、Controller、Router、Errorの反映を確認 | 5ファイルをGitHubから取得・内容確認 | **合格（静的確認）** |
+| TASK02-BUILD | `npm run build` | `tsc`がエラーなく終了 | `> tsc`後、エラーなしでPowerShellプロンプトに戻った | **合格** |
+| TASK02-DB-01 | `information_schema.columns`から表定義を確認 | id BIGINT IDENTITY ALWAYS、prompt・response_text TEXT、created_at TIMESTAMPTZ、全列NOT NULL | 指定4列・データ型・IDENTITY・DEFAULT CURRENT_TIMESTAMP・NOT NULLを確認 | **合格（DB定義照会）** |
+| TASK02-DB-INDEX | `pg_constraint`／`pg_indexes`を確認 | PK、prompt/response_text CHECK、複合降順インデックス | `ai_qa_logs_pkey`、2件のCHECK、`idx_ai_qa_logs_created_id`（created_at DESC, id DESC）を確認 | **合格（DB定義照会）** |
+| TASK02-API-01 | `curl.exe -i http://localhost:3000/api/ai/history`（デモ許可時） | HTTP 200、`success:true`、`items:[]` | **HTTP 200 OK**、`{"success":true,"items":[]}`、`Cache-Control: no-store`。応答日時 2026-11-18 15:46:09 JST | **合格** |
+| TASK02-SQL-ORDER | `generate_series(1,25)`を使うWITH句の模擬履歴（同一created_at）に対して`ORDER BY created_at DESC, id DESC LIMIT 20` | 20件、ID 25→6 | 20件、ID 25から6まで1ずつ降順 | **合格（SQLロジックのみ）** |
+| TASK02-CHECK-A | `INSERT (prompt='', response_text='test response')` | prompt CHECK違反 | SQLSTATE `23514`、`ai_qa_logs_prompt_length_chk` | **合格（制約違反を確認）** |
+| TASK02-CHECK-B | `INSERT (prompt=repeat('A',2001), response_text='test response')` | prompt CHECK違反 | SQLSTATE `23514`、`ai_qa_logs_prompt_length_chk` | **合格（制約違反を確認）** |
+| TASK02-CHECK-C | `INSERT (prompt='test prompt', response_text='')` | response CHECK違反 | SQLSTATE `23514`、`ai_qa_logs_response_nonempty_chk` | **合格（制約違反を確認）** |
+| TASK02-API-03A | 停止時`POST /api/ai/ask` | HTTP 503、`DEMO_DISABLED` | HTTP 503、`DEMO_DISABLED`、`no-store`。応答日時 2026-11-18 15:51:29 JST | **合格** |
+| TASK02-API-03B | 停止時`GET /api/ai/history` | HTTP 503、`DEMO_DISABLED` | HTTP 503、`DEMO_DISABLED`、`no-store`。応答日時 2026-11-18 15:51:35 JST | **合格** |
+| TASK02-REG-01 | `/`、`/todo`、TODO一覧・登録・完了更新・削除 | 既存動作を維持 | TOP/TODO表示、TODO一覧・登録・更新・削除すべて正常との操作報告 | **合格（操作報告）** |
+| TASK02-REG-02 | `/api/v1/todos/unknown` | 既存仕様の404 `NOT_FOUND` | `success:false`、`error.code: NOT_FOUND`を確認。HTTPステータスそのものは提示されていない | **JSON確認済み／HTTPステータス未記録** |
 
-**判定：TASK-02のコード作成・GitHub反映は完了。ビルド・DB適用・HTTP回帰試験は未実施のため、受入は未完了。** DBのDELETE/TRUNCATE/DROP、既存表の再作成、DBへのSQL実行、環境変数や公開設定の変更は行っていない。
+#### CHECK制約試験の実行状態・注意
+
+- Aでは`BEGIN`、`SAVEPOINT test_case`の成功が報告された。B/CもSAVEPOINTまで同様との報告。
+- 3ケースともINSERTは制約違反（SQLSTATE `23514`）で拒否された。エラーに表示されたID 1、2、3はIDENTITYシーケンスの採番結果を示し、挿入成功の証拠ではない。
+- SQL Editorが失敗後の`ROLLBACK TO SAVEPOINT`／`ROLLBACK`を実行したか、および試験後のトランザクション状態は**未確認**。必要なら同一セッションで`ROLLBACK;`を単独実行して確認する。
+- WHEN句で模擬した25件は`ai_qa_logs`へINSERTしていない。この結果は**実テーブルを通るModel/APIの21件以上の試験ではない**。
+- CHECKのエラー出力にはテスト用の入力断片が含まれたが、APIキー・DB接続情報は提示されていない。本記録では長文のテスト入力やrequestIdの具体値を転載しない。
+
+### 未検証・保留事項（合格として数えない）
+
+| 項目 | 状態と理由 |
+| --- | --- |
+| 実テーブルに21件以上存在する場合の`GET /api/ai/history` | **未実施**。SQL WITH句での20件確認のみ。実APIでの最大20件・同時刻ID降順は未測定 |
+| DB列→公開JSONの`id`文字列、`prompt`、`response`、`createdAt`への変換 | **未実測**。0件応答しか確認されていない |
+| DB障害時のHTTP 500/503 `HISTORY_UNAVAILABLE` | **未実施**。安全な故障注入を実施していない |
+| 停止ゲート通過前のDB SELECT呼出回数 | **実行時計測未実施**。Middleware/Routerの先行順は静的確認済み |
+| CHECK拒否後のトランザクション終了・行の不存在照会 | **未確認**。SQLSTATE 23514の拒否は確認済み、ROLLBACK実行完了の証跡なし |
+| 実デプロイProduction／保護済みPreviewでの確認 | **未実施**。ローカルで停止応答を確認 |
+| TODOの10KB+1リクエスト拒否、既存DBサンプル、その他既存エラー応答の回帰 | **未実施**。TOP/TODO通常操作と未知TODO APIのJSONは確認済み |
+| SQL DDL実行の完全な履歴・接続先識別 | **未記録**。対象表の構造が存在することは照会で確認したが、実行時のDB名・ブランチとDDL適用ログは提示されていない |
+
+### 総合判定
+
+**TASK-02：実装済み。ビルド・テーブル定義・空履歴API・SQL並び順・CHECK拒否・停止ゲート・TOP/TODOの主要回帰は合格。上記未検証事項があるため、全受入条件の完全合格とは記録しない。**
+
+- 既存データ削除、TRUNCATE、DROP、表の再作成を本記録作成時には行っていない。
+- 記録作成に伴うDB操作、環境変数変更、デプロイ操作は実施していない。
+- TASK-03以降の実装は行っていない。
