@@ -490,3 +490,91 @@ REQ-01〜REQ-04の主要な受け入れ条件と、ローカル環境で実施�
 ### 10. 次工程
 
 工程12の内容は `docs/todo/03_implementation_plan.md` を確認してから着手する。Productionへの公開や既存DBへの変更は、本記録のPASS判定だけを根拠に実行しない。
+
+## 工程13：Vercel Productionでの動作確認
+
+### 1. 実施情報
+
+| 項目 | 内容 |
+|---|---|
+| 実施日 | 2026年11月18日 |
+| 実施環境 | Vercel Production |
+| 対象ブランチ | `main` |
+| PR | #5（マージ済み） |
+| マージコミット | `330ae7fbbf5035e3b3d5cc52cac9a8db95361a40` |
+| Vercelデプロイ | `READY` |
+| Production URL | `https://ai-drive-project2026-8jgofblzy-hyosetsus-projects.vercel.app` |
+| DB | Neon PostgreSQL |
+| テストデータID | 未記録 |
+
+### 2. Productionデプロイ確認（工程13-A）
+
+| 確認項目 | 実測結果 | 判定 |
+|---|---|---|
+| PR #5のマージ | GitHubでマージ済みを確認 | PASS |
+| Productionデプロイ | VercelでREADYを確認 | PASS |
+| デプロイ対象ブランチ | `main` | PASS |
+| デプロイコミット | `330ae7f`（PR #5のマージコミットと一致） | PASS |
+
+### 3. 読み取り・既存機能確認（工程13-B）
+
+| ID | 確認項目 | 実測結果 | 判定 |
+|---|---|---|---|
+| B01 | TOP画面 `/` | 正常表示（実施者報告） | PASS |
+| B02 | `/api/db-check` | DB接続成功（実施者報告） | PASS |
+| B03 | `/db-sample` | 商品一覧正常表示（実施者報告） | PASS |
+| B04 | TODO画面 `/todo/` | 正常表示（実施者報告） | PASS |
+| B05 | GET `/api/v1/todos` | TODO一覧取得成功（実施者報告） | PASS |
+
+※ Productionでの個別HTTPステータス・レスポンス本文の詳細ログは未記録。
+
+### 4. Preview・Production DB照合（工程13-C）
+
+| 確認項目 | 確認結果 | 判定 |
+|---|---|---|
+| PreviewとProductionのDB接続先 | Vercel・Neonの設定照合で一致（実施者報告） | PASS |
+| 両環境のTODO一覧 | 同じデータを確認（実施者報告） | PASS |
+| DB接続 | 両環境で正常（実施者報告） | PASS |
+
+判定：**PASS（実施者の設定照合・データ比較に基づく）**
+
+※ 接続文字列・認証情報の値は記録しない。
+
+工程11時点ではPreviewとProductionのDB接続先の同一性は未確認であったが、工程13-Cで実施者が設定とデータを照合し、一致を確認した。工程11の当時の判定は変更せず、工程13で追加確認した結果として記録する。
+
+### 5. Production CRUD確認（工程13-D）
+
+既存レコードへの影響を避け、実施者が新規登録したテストデータを対象に確認した。
+
+| ID | テスト内容 | 期待結果 | 実測結果 | 判定 |
+|---|---|---|---|---|
+| D01 | POST：TODO登録 | テストデータを登録できる | 登録成功（実施者報告） | PASS |
+| D02 | GET：一覧取得 | 登録したTODOが取得できる | 一覧取得成功（実施者報告） | PASS |
+| D03 | PATCH：完了状態更新 | completedをtrueに変更できる | 更新成功（実施者報告） | PASS |
+| D04 | PATCH：完了解除 | completedをfalseに変更できる | 更新成功（実施者報告） | PASS |
+| D05 | DELETE：TODO削除 | 登録したテストデータを削除できる | 削除成功（実施者報告） | PASS |
+
+補足：
+
+- テストデータID：未記録
+- テストデータのタイトル：未記録
+- POST・PATCH・DELETEのProduction HTTPステータス：個別ログ未提示のため未確認
+- ProductionのレスポンスJSON詳細：未確認
+- DELETE後のDB残存確認：未確認
+- 他レコードへの影響：未確認
+- 認証Cookie・DB接続文字列は記録しない
+
+### 6. 工程13の最終判定
+
+| 区分 | 判定 |
+|---|---|
+| Productionデプロイ | PASS |
+| 既存機能の回帰確認 | PASS（実施者報告） |
+| TODO画面・一覧取得 | PASS（実施者報告） |
+| Preview・ProductionのDB照合 | PASS（実施者報告） |
+| TODO CRUD操作 | PASS（実施者報告） |
+| Productionの個別HTTP仕様 | 未確認 |
+| テストデータID・DB残存確認 | 未確認 |
+| 総合判定 | **PASS（報告された主要動作確認）** |
+
+**工程13の主要動作確認はPASS（実施者報告に基づく）。** Productionデプロイ、既存機能、TODOのCRUD操作、Preview・Production間のDB照合を確認した。一方、Productionの個別HTTPステータス・レスポンス本文、テストデータID、DB残存確認については未確認として記録する。これらの未確認項目をPASSに含めない。
