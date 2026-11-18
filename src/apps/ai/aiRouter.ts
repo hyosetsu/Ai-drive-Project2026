@@ -1,5 +1,6 @@
 import express, { Router } from 'express';
 import { aiFinalErrorHandler, sendAiError } from './aiError';
+import { listAiHistory } from './aiController';
 import {
   aiRequestContext,
   aiDemoGate,
@@ -21,7 +22,9 @@ aiRouter.post('/ask', express.json({ limit: 16384, strict: true }), (_req, res) 
   sendAiError(res, 404, 'NOT_FOUND', '指定されたURLは存在しません');
 });
 
-// historyの本処理はTASK-03で追加する。
+// TASK-02: read-only history API (the demo gate above remains first).
+aiRouter.get('/history', listAiHistory);
+
 aiRouter.use((_req, res) => {
   sendAiError(res, 404, 'NOT_FOUND', '指定されたURLは存在しません');
 });
