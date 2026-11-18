@@ -72,3 +72,39 @@ GitHubの`feature/ai-app`において、着手前の`index.ts`にはAI Router登
 - AI用のGemini・DBアクセスが未実装であることは静的に確認した。これを実行時の呼出0回測定済みと表現しない。
 - 検証記録は会話で報告された範囲に限定し、秘密ファイルの内容・環境変数の値・APIキー等を保存していない。
 - **TASK-02以降の実装は行っていない**。
+
+
+---
+
+## TASK-02：AI履歴DB土台・履歴取得API（2026-11-18）
+
+- 対応要件：REQ-AI-D001/D002/D003/D004/D005、REQ-AI-F007/F008/F009、REQ-AI-N001/N005
+- 対応設計：DES-AI-002/004/005/006
+- 実装範囲：DDL、共有Poolを使用するModel、GET /api/ai/history、公開項目の変換、履歴障害応答
+- 注意：今回の依頼に従い、従来設計の `question/answer` 列・`data` 配列ではなく、`prompt/response_text` 列・`items` 配列を採用。後続UI/INSERT実装は新形式との整合確認が必要
+
+### 変更内容と事前状態
+
+- 事前：TASK-01で履歴GETは未実装、AI用SQLとModel/Controllerは存在しなかった
+- 新規：`sql/ai/030_create_ai_qa_logs.sql`（CREATE TABLE IF NOT EXISTS、制約、降順複合索引）
+- 新規：`src/apps/ai/aiModel.ts`（固定20件SELECT、DB列→API列変換、将来用パラメータ付き1行INSERT）
+- 新規：`src/apps/ai/aiController.ts`（成功200/空配列、障害500/503）
+- 更新：`src/apps/ai/aiRouter.ts`（デモゲートより後にGET履歴を追加）
+- 更新：`src/apps/ai/aiError.ts`（HISTORY_UNAVAILABLEを追加）
+- 変更していない：`db.ts`、`index.ts`、既存TODO、環境変数、デプロイ設定
+
+### 試験結果・未実施
+
+| 試験 | 確認方法・期待値 | 実測 | 状態 |
+| --- | --- | --- | --- |
+| TASK02-STATIC-01 | GitHubで5ファイルを再取得し、新旧ファイルが反映されたこと | 5ファイルの取得を確認 | 静的確認済み |
+| TASK02-BUILD | `npm run build` で型エラーなし | 未実行（利用者ローカル環境で実施要） | **未実施** |
+| TASK02-DB-01 | 対象DBを事前照会して既存ai_qa_logs表・列・制約・索引を確認 | DB接続・照会なし | **未実施** |
+| TASK02-DB-02 | 安全な試験用DBでCREATE適用後に定義と制約を照会 | SQLファイル生成のみ、未適用 | **未実施** |
+| TASK02-API-01 | 許可したローカル環境の空表からHTTP 200 `{success:true,items:[]}` | HTTP実行なし | **未実施** |
+| TASK02-API-02 | 21件以上・同日時で最新20件、created_at DESC/id DESC、id文字列を確認 | テストデータ投入・HTTP実行なし | **未実施** |
+| TASK02-API-03 | 停止状態でGET履歴503 DEMO_DISABLED、DB問い合わせなし | 変更後のHTTP実行なし | **未実施** |
+| TASK02-API-04 | DB障害でHISTORY_UNAVAILABLE、成功空配列にはしない | 故障注入なし | **未実施** |
+| TASK02-REG-01 | TOP/TODOの表示、CRUD、TODO JSON 10KB挙動を回帰確認 | 変更後の動作確認なし | **未実施** |
+
+**判定：TASK-02のコード作成・GitHub反映は完了。ビルド・DB適用・HTTP回帰試験は未実施のため、受入は未完了。** DBのDELETE/TRUNCATE/DROP、既存表の再作成、DBへのSQL実行、環境変数や公開設定の変更は行っていない。
