@@ -123,11 +123,15 @@ document.addEventListener('DOMContentLoaded', () => {
       if (sequence !== loadSequence) return;
       list.replaceChildren();
       setStatus('');
-      setError(
-        caught instanceof Error && !['INVALID_RESPONSE', 'Failed to fetch'].includes(caught.message)
-          ? caught.message
-          : '履歴の取得に失敗しました。接続状況を確認して再読み込みしてください。'
-      );
+      const safeMessages = [
+        '現在、AI履歴機能は利用できません。',
+        '履歴を取得できませんでした。時間をおいて再読み込みしてください。',
+        '履歴の取得に失敗しました。接続状況を確認して再読み込みしてください。',
+      ];
+      const message = caught instanceof Error && safeMessages.includes(caught.message)
+        ? caught.message
+        : safeMessages[2];
+      setError(message);
     } finally {
       if (sequence === loadSequence) reloadButton.disabled = false;
     }
