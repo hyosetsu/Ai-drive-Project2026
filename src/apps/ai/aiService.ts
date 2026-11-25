@@ -4,7 +4,7 @@
  * Only the current validated question is sent; stored history is never sent.
  */
 
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-3.5-flash-lite';
 const GEMINI_TIMEOUT_MS = 30_000; // provisional; verify with the deployment runtime in TASK-09
 
 export class AiGenerationError extends Error {
