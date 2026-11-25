@@ -2,7 +2,7 @@
 
 - 対象リポジトリ：`hyosetsu/Ai-drive-Project2026`
 - 対象ブランチ：`feature/ai-app`
-- 記録対象：**TASK-01〜TASK-03（各工程の実装と検証結果）**
+- 記録対象：**TASK-01〜TASK-04（各工程の実装と検証結果）**
 - 実施日：2026-11-18、2026-11-25（日本時間）
 - 記録根拠：開発者が会話で提示したPowerShellのビルド結果、curl.exeのHTTP応答、画面・TODO操作の報告
 - 判定方針：実測・操作報告・静的確認・未実施を区別する。未測定の値を補完しない。
@@ -195,37 +195,82 @@ GitHubの`feature/ai-app`において、着手前の`index.ts`にはAI Router登
 
 ---
 
-## TASK-04：模擬回答生成・質問回答の同一行保存（実装記録）
+## TASK-04：模擬回答生成・質問回答の同一行保存（実装・検証記録）
 
 - 対象ブランチ：`feature/ai-app`
+- 実施日：2026-11-25（日本時間）
 - 対応：`REQ-AI-F002/F003/F005/F009/D001/D005/D006/N003`、`DES-AI-001/002/004/005/006/008`
-- 対象：`src/apps/ai/aiService.ts`（新規）、`aiController.ts`、`aiRouter.ts`、`aiError.ts`（更新）。`aiModel.ts`はTASK-02の`insertAiHistory`（パラメータ付き単一行INSERT）を再利用し、変更していない。
-- 状態：**コードのGitHub反映・再取得による静的確認済み。ローカルのビルド・HTTP試験・DBのINSERT実測は未実施。**
+- 実装変更：`src/apps/ai/aiService.ts`（新規）、`aiController.ts`・`aiRouter.ts`・`aiError.ts`（更新）、`aiModel.ts`の既存パラメータ付きINSERTを再利用。検証用`tests/ai/task04-call-count.test.cjs`を追加し、TypeScript変換部分を修正。
+- 記録根拠：開発者から提示されたPowerShellでのビルド・HTTP結果、Neon SQL EditorのSQL実行結果、Nodeテストランナー出力、ブラウザ表示報告。未測定のHTTPコード、DB件数、呼出回数を推測で補わない。
+- 仕様整合：POST本文は`question`、成功時は`{success:true,data:{id,prompt,response,createdAt}}`。保存テーブルは`prompt/response_text/created_at`、履歴GETは`items`を使用（設計書の旧例`question/answer`・`data`とは差分あり）。
 
-### 実装内容と設計上の注意
+### 実装内容
 
-1. `POST /api/ai/ask`を、既存の停止ゲート→Content-Encoding/Content-Type検査→16KiBのJSON解析→Controllerの順に接続。既存TODOのRouterやDB接続設定は変更しない。
-2. 模擬回答は`generateMockAnswer`に固定したテスト専用の日本語文。Gemini SDKのimport・初期化・外部AIアクセスを行わない。
-3. 模擬回答の保存を許可するのは、`NODE_ENV=development`、`VERCEL_ENV`未設定、`AI_DEMO_ENABLED=true`、接続元ソケットのアドレスがループバックの場合のみ。既存のゲートも先に判定する。実際のホスティング保護が確証されない状態でPreview/Productionのデモを有効にしない。
-4. JSON本文の型・`question`文字列・trim後の1〜2,000 Unicodeコードポイント・NULを検証し、失敗時は400 `INVALID_BODY`／422 `VALIDATION_ERROR`。検証不合格では模擬回答・DB INSERTを呼ばない。
-5. 入力検証→模擬回答→`insertAiHistory`の1回INSERT→成功時だけ201 `{success:true,data:{id,prompt,response,createdAt}}`。TASK-02で採用した公開項目名を維持し、歴史APIも`items`を維持。
-6. INSERT例外で、PostgreSQLが明示した`severity=ERROR`かつSQLSTATEクラス22/23/42/P0の拒否は500 `SAVE_FAILED`、それ以外は保存結果不明として503 `SAVE_RESULT_UNKNOWN`。成功に見せず、回答本文や秘密値をエラー応答に含めず、INSERTを自動再試行しない。分類は隔離DBでの故障注入で別途検証する。
-7. 設計の旧例は`question/answer/created_at`と`data`を使用しているが、現行TASK-02/03の確定実装`prompt/response_text`と`items`に整合させた。POSTの送信フィールドは引き続き`question`。
+1. 既存デモ停止ゲート・Content-Encoding/Content-Type検査・16KiB JSON解析の後に`POST /api/ai/ask`を接続。ローカル`development`・`AI_DEMO_ENABLED=true`・`VERCEL_ENV`未設定・ループバック接続の場合だけ模擬回答保存を許可。
+2. `question`の型、前後空白除去、1〜2,000 Unicodeコードポイント、NUL拒否を実装。無効入力で模擬Service/DBを実行しない。
+3. Gemini SDK呼出しを持たない固定模擬Service→パラメータ化した同一行INSERT→保存成功時のみHTTP 201。保存失敗・結果不明は回答本文を返さず、INSERTを自動再試行しない。
+4. 明示的なPostgreSQLエラー`severity=ERROR`かつSQLSTATEクラス22/23/42/P0を500 `SAVE_FAILED`、それ以外を503 `SAVE_RESULT_UNKNOWN`として分類。
+5. `tests/ai/task04-call-count.test.cjs`でController/Middlewareをスタブ・スパイで隔離して検査。初版はTypeScript読み込みの`ts.ScriptTarget.ES2022`参照エラーで8件中1件合格・7件失敗（**テスト用ハーネスの不具合**）。`esbuild`による変換へ修正後、8件すべて成功。
 
-### 試験予定（未実測）
+### 実測結果：正常系・入力境界・デモ停止
 
-| 試験ID | 期待結果 | 現状 |
-| --- | --- | --- |
-| TASK04-BUILD | `npm run build`が成功 | **未実施** |
-| TASK04-01 | 隔離テスト用DBで有効な`question`をPOST→201、回答・ID・日時を受け取る | **未実施** |
-| TASK04-02 | POSTの保存行とGET履歴・DB SELECTで質問と回答が一致し、1リクエストで1行だけ増える | **未実施** |
-| TASK04-03 | 前後空白除去、Unicodeコードポイント境界（1/2000/2001）、入力型不正・空白のみを検証 | **未実施** |
-| TASK04-04 | 無効入力時、模擬Service/DB INSERTは0回（スタブ・スパイ） | **未実施** |
-| TASK04-05 | 停止ゲートの503、Production相当・非ローカルの模擬回答拒否 | **未実施** |
-| TASK04-06 | DBの明示的INSERT拒否→500 `SAVE_FAILED`、接続断等→503 `SAVE_RESULT_UNKNOWN` | **未実施** |
-| TASK04-07 | 保存失敗時の秘密情報・回答本文の非露出、AI外部通信なし | **静的確認のみ。実行時未検証** |
-| TASK04-08 | TOP/TODOの一覧・登録・更新・削除、DBサンプル等の回帰 | **未実施** |
+| 試験ID | 条件・期待結果 | 実際に報告された結果 | 判定 |
+| --- | --- | --- | --- |
+| TASK04-BUILD | `npm run build`のTypeScript検査 | `> tsc`の後エラーなくPowerShellプロンプトに復帰 | **合格** |
+| TASK04-01 | `POST /api/ai/ask`有効質問→201・模擬回答・保存ID | `question="  TASK04_SAVE_TEST_001  "`を送信→**201**、`success:true`、`id:"4"`、`prompt:"TASK04_SAVE_TEST_001"`、固定の模擬回答、`createdAt:"2026-11-25T04:53:44.992Z"` | **合格** |
+| TASK04-02 | 保存後の`GET /api/ai/history`で同じ質問・回答を取得 | ID 4・質問`TASK04_SAVE_TEST_001`と同じ模擬回答が履歴一覧に表示された | **合格（履歴照合）** |
+| TASK04-03A | 空文字・空白のみは422、数値・項目なしは400 | 空文字**422**、空白のみ**422**、数値**400**、項目なし**400** | **4件合格（ステータス）** |
+| TASK04-03B | 日本語「あ」1/2,000/2,001文字→201/201/422 | **201／201／422**、すべて`PASS` | **3件合格** |
+| TASK04-03C | 絵文字😀1,500/2,000/2,001個→201/201/422 | **201／201／422**、すべて`PASS` | **3件合格** |
+| TASK04-05A | デモ停止時のPOSTは503 `DEMO_DISABLED` | **HTTP 503**、`success:false`、`DEMO_DISABLED`、`Cache-Control:no-store`、UUID形式requestId。2026-11-25 **14:00:47 JST** | **合格** |
+| TASK04-05B | デモ停止時のGET履歴は503 `DEMO_DISABLED` | **HTTP 503**、同様の安全なエラーJSON。2026-11-25 **14:00:48 JST** | **合格** |
+
+### 実測結果：DB保存失敗・安全な後片付け
+
+| 試験ID | 条件・期待結果 | 実際に報告された結果 | 判定 |
+| --- | --- | --- | --- |
+| TASK04-06A | DB接続不能→503 `SAVE_RESULT_UNKNOWN` | 接続先をローカルの到達不能なDBへ一時変更してPOST→**503**、`success:false`、`SAVE_RESULT_UNKNOWN`、保存結果の再確認を促すメッセージ、requestIdあり。回答本文・DB接続情報なし | **合格（接続不能ケース）** |
+| TASK04-06B | 隔離DBで確定的なINSERT拒否→500 `SAVE_FAILED` | 隔離Neonで指定テスト質問だけ拒否する一時CHECK制約を追加。`TASK04_SAVE_FAILED_TEST`のPOST→**HTTP 500**、`success:false`、`SAVE_FAILED`、回答本文なし | **合格（CHECK拒否ケース）** |
+| TASK04-06C | 失敗した質問はDBに保存されず、一時制約は残らない | Neon SQL Editorで`failed_test_rows=0`、`remaining_constraints=0`を照会 | **合格（事後照会・制約削除確認）** |
+| TASK04-06D | DB接続不能試験後に通常の履歴APIへ復旧 | `DATABASE_URL`未設定のPowerShellがあったが、起動中のAPIでGET履歴**200**・`success:true`・テスト履歴ID 4〜8等を取得 | **合格（履歴APIの動作復旧）／接続ブランチ識別は別途注意** |
+
+補足：
+
+- **接続先食い違いを実測**：SQL Editorで`history_count=25`、テスト質問0件、制約存在を確認した一方、当初のPOSTは**201**・`id:"9"`で保存された。接続先が一致していない可能性が高く、この最初の201は`SAVE_FAILED`の合格判定に使っていない。接続環境変数を適切に設定後、同じ質問で500を再現した。
+- `database_name=neondb`と`schema_name=public`だけではNeonブランチを一意に特定できない。DB操作前の隔離ブランチ確認と、サーバーを起動するPowerShellの接続設定一致を重視する。
+- 500試験では既存の共有DBの権限・トリガーを変更せず、隔離DBに限定した一時CHECK制約を利用。制約追加・削除と0件照会は開発者がNeon SQL Editorで実施した。DBの削除・TRUNCATEは行っていない。
+- 503は接続不能を使った結果不明応答の再現であり、**INSERT送信後・応答喪失**の実故障は未再現。500試験でドライバが返したSQLSTATEコードそのものはHTTP応答に記載されず、今回は既知のCHECK違反からエラー分類を確認した。
+
+### 実測結果：スタブ・スパイおよびTOP・TODO回帰
+
+| 試験ID | 条件・期待結果 | 実際に報告された結果 | 判定 |
+| --- | --- | --- | --- |
+| TASK04-SPY | `node --test tests/ai/task04-call-count.test.cjs` | 初版は**pass 1/fail 7**（テストハーネスのTypeScript変換エラー）。修正後は**tests 8、pass 8、fail 0**、約930 ms | **合格（修正版）** |
+| TASK04-SPY-VALID | 有効入力で模擬Service 1回、INSERT 1回、SELECT 0回・HTTP 201 | スタブの計測と応答アサーションが成功 | **合格（隔離単体試験）** |
+| TASK04-SPY-INVALID | 空文字・空白・2,001コードポイント・数値・項目なしでService/INSERT/SELECT全0回 | 5ケースのアサーションが成功 | **合格（隔離単体試験）** |
+| TASK04-SPY-GATE | 停止ゲート時にControllerへ進まずService/DB 0回・503 | アサーションが成功 | **合格（隔離単体試験）** |
+| TASK04-SPY-STATIC | 模擬ServiceコードにGemini SDK importや外部通信処理なし | 静的検査1件が成功 | **合格（静的検査）** |
+| TASK04-REG-01 | TOP `/`が200、TODO画面が表示される | HEAD `/`は**200**、HEAD `/todo`は**301 Location:/todo/**、`curl -L -I`で最終**200**、ブラウザで`/todo/`正常表示 | **合格（応答・操作報告）** |
+| TASK04-REG-02 | TODO一覧が取得できる | GET `/api/v1/todos` → **200**、`{"success":true,"data":[]}` | **合格** |
+| TASK04-REG-03 | TODOの登録・完了更新・削除 | テスト用TODO `TASK04_REGRESSION_TEST`を登録、`id=1`、PATCH後`completed=True`、DELETEがエラーなく終了。各操作のHTTPコードそのものは未記録 | **合格（操作結果）／HTTPコード未記録** |
+| TASK04-REG-04 | テストTODOの削除後に一覧が元の0件へ戻る | GETの`success=True`、`Count=0` | **合格** |
+| TASK04-REG-05 | TODOテーブル存在 | `to_regclass('public.todo_tasks')` → `todo_tasks` | **合格（DB照会）** |
+
+### 残る未検証・条件付き事項
+
+| 項目 | 状態・理由 |
+| --- | --- |
+| 1件のHTTP POSTに対する実DBの増分を前後COUNTで厳密確認 | **未測定**。201成功と履歴上の同一記録確認、およびスタブでのINSERT1回は実施済み。実DBの行数増分比較は別 |
+| ゲート停止時のDB SELECT/Gemini通信の実プロセス計測 | **未実施**。Middlewareスタブによる0回・模擬Service静的検査は成功したが、実Gemini/DBネットワーク通信計測ではない |
+| Gemini APIへの実通信 | **未実施（TASK-04の対象外）**。TASK-05にて実装する |
+| INSERT結果不明の送信後障害、SQLSTATE 42501/P0001、他クラス | **未実施**。接続不能とCHECK制約拒否のみ |
+| Production・保護済みPreviewでの動作、非ループバックの模擬機能拒否 | **未実施**。コード上の条件は確認済み。公開環境の検証は後続 |
+| AIリクエストのJSON構文不正、16KiB超、未対応Content-Encodingなどの全境界 | **TASK-04としては実測未報告**。パーサーとエラーハンドラは実装済みだが、後続の異常系工程で確認 |
+| TOPブラウザの表示細部、TODO既存404や10KB超、DBサンプル等の詳細回帰 | **未実施／今回の報告なし**。TOP HEAD200とTODOの画面/CRUDは確認済み |
+| NeonのDB接続資格情報のローテーション完了 | **未確認**。過去に接続文字列が会話へ露出しているため、無効化・再発行の確認が必要 |
 
 ### 総合判定
 
-**TASK-04：コード実装・GitHub反映済み、受入試験未完了。** 検証は既存データを保護する隔離DBでのみ行う。GitHub上のSQLや既存データの削除・TRUNCATE・テーブル再作成、Neonの接続資格情報変更、公開設定変更を今回の実装処理では行っていない。TASK-05の実AI接続は未着手。
+**TASK-04：実装済み。模擬回答のPOST→201→履歴GET、入力不正・Unicode文字数境界、デモ停止、DB保存異常（500/503）、隔離DBの後片付け、スタブ・スパイ8件、TOP/TODO主要回帰の受入試験に合格。**
+
+未測定項目を上表に留保し、**TASK-05の実Gemini接続は未着手**とする。今回の記録更新ではソースコード・DB・環境変数・デプロイ設定を変更しない。
