@@ -140,7 +140,7 @@ test('disabled gate blocks handler before service or DB call', async () => {
   }
 });
 
-test('Gemini service source has no Gemini SDK import or network access', () => {
+test('Gemini service sets one attempt, disables continuation, and lazily imports SDK', () => {
   const source = fs.readFileSync(path.join(srcDir, 'aiService.ts'), 'utf8');
   assert.match(source, /retryOptions:\s*\{\s*attempts:\s*1\s*\}/);
   assert.match(source, /automaticContinuation:\s*false/);
