@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         signal: controller.signal,
       });
 
-      if (!/^application\\/json(?:\\s*;|\\s*$)/i.test(response.headers.get('content-type') || '')) {
+      if (!/^application\/json(?:\s*;|\s*$)/i.test(response.headers.get('content-type') || '')) {
         throw new Error('INVALID_RESPONSE');
       }
 
