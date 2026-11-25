@@ -160,10 +160,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return '現在、AI質問機能は利用できません。';
       case 'INVALID_BODY':
       case 'INVALID_JSON':
+        return '送信形式が正しくありません。画面を再読み込みしてお試しください。';
       case 'VALIDATION_ERROR':
-      case 'REQUEST_TOO_LARGE':
-      case 'UNSUPPORTED_CONTENT_ENCODING':
         return '質問内容を確認してください。1〜2,000文字で入力してください。';
+      case 'REQUEST_TOO_LARGE':
+        return '送信データが大きすぎます。質問を短くしてください。';
+      case 'UNSUPPORTED_CONTENT_ENCODING':
+        return '対応していない送信形式です。画面を再読み込みしてください。';
       case 'AI_TIMEOUT':
         return 'AIの応答が時間内に届きませんでした。自動再送はしません。';
       case 'AI_UNAVAILABLE':
@@ -250,7 +253,10 @@ document.addEventListener('DOMContentLoaded', () => {
       askStatus.textContent = '';
       const known = [
         '現在、AI質問機能は利用できません。',
+        '送信形式が正しくありません。画面を再読み込みしてお試しください。',
         '質問内容を確認してください。1〜2,000文字で入力してください。',
+        '送信データが大きすぎます。質問を短くしてください。',
+        '対応していない送信形式です。画面を再読み込みしてください。',
         'AIの応答が時間内に届きませんでした。自動再送はしません。',
         'AIの回答を取得できませんでした。時間をおいてお試しください。',
         '回答を保存できませんでした。',
