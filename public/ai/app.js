@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const question = questionInput.value.trim();
     const count = Array.from(question).length;
-    if (count < 1 || count > 2000 || question.includes('\\u0000')) {
+    if (count < 1 || count > 2000 || question.includes('\u0000')) {
       setAskError('質問は前後の空白を除いて1〜2,000文字で入力してください。');
       return;
     }
