@@ -274,3 +274,42 @@ GitHubの`feature/ai-app`において、着手前の`index.ts`にはAI Router登
 **TASK-04：実装済み。模擬回答のPOST→201→履歴GET、入力不正・Unicode文字数境界、デモ停止、DB保存異常（500/503）、隔離DBの後片付け、スタブ・スパイ8件、TOP/TODO主要回帰の受入試験に合格。**
 
 未測定項目を上表に留保し、**TASK-05の実Gemini接続は未着手**とする。今回の記録更新ではソースコード・DB・環境変数・デプロイ設定を変更しない。
+
+
+---
+
+## TASK-05：実Gemini API接続（実装記録・検証待ち）
+
+- 対象ブランチ：`feature/ai-app`、実装日：2026-11-25（日本時間）
+- 対応：`REQ-AI-F004/F005/F010/D006/N002/N007`、`DES-AI-001/002/004/007/008`
+- 対象：`package.json`、`src/apps/ai/aiService.ts`、`aiController.ts`、`aiRouter.ts`、`aiError.ts`、隔離テストファイル。既存`aiModel.ts`・TODO・共通DB設定は変更しない。
+- SDK：公式`@google/genai` 3.6.1（Node.js 22以上が必要）。環境変数名`GEMINI_API_KEY`、モデルID`gemini-2.5-flash`を採用。固定システムプロンプトなし。質問は当該1件のみ送信し、過去履歴は渡さない。
+- `package-lock.json`：**未更新**。外部レジストリへのアクセスが可能なローカル環境で`npm install`を実行して正式なlockfileを生成し、同じブランチにコミットする必要がある。lockfile不一致の状態で`npm ci`を実行しない。
+
+### 実装内容
+
+1. デモゲート・入力検証を通過した場合だけServiceを呼び、SDKを遅延import・初期化。環境変数にキーがなければAI呼出せず502を返す。キー値は記録・応答しない。
+2. `generateContent`を1回呼び出す。SDKリトライ設定`retryOptions.attempts=1`（初回呼出を含む1回、再試行0回）、`automaticContinuation=false`（暗黙の追加呼出を抑止）。
+3. 暫定SDKタイムアウト`30,000ms`。SDKのタイムアウト分類は504 `AI_TIMEOUT`、その他の取得失敗・空白回答は502 `AI_UNAVAILABLE`。タイムアウト30秒は未確定で、TASK-09で実環境と照合する。
+4. Gemini回答取得・trim成功後に既存`insertAiHistory(question, answer)`を1回だけ呼ぶ。INSERT成功後のみ201・保存された回答を返す。確定的DB拒否は500 `SAVE_FAILED`、保存結果不明は503 `SAVE_RESULT_UNKNOWN`。自動再送・自動INSERT再試行は行わない。
+5. Production・Preview未認証を許可しない既存のゲートを維持。ローカルdevelopment/ループバック以外では実AI呼出を拒否する。
+6. スパイテストは新しいService名に対応し、正常時Gemini1回/INSERT1回、無効入力とゲート停止時0回、AI失敗時INSERT0回などを検査するよう更新。
+
+### 予定試験（実測が提出されるまで合格扱いにしない）
+
+| 試験ID | 期待結果 | 現状 |
+| --- | --- | --- |
+| TASK05-DEPS | `npm install`によりSDKとlockfileの依存整合 | **未実施、lockfile更新待ち** |
+| TASK05-BUILD | `npm run build`がエラーなく完了 | **未実測** |
+| TASK05-SPY | `node --test tests/ai/task04-call-count.test.cjs`の全件合格、正常1回、無効入力0回、AI失敗時INSERT0回 | **未実測**（既存のTASK-04テスト結果を流用しない） |
+| TASK05-REAL | 隔離DB＋ローカル開発環境で有効な1質問→実Gemini応答・1行保存・201 | **未実測。キー値・回答全文は記録しない** |
+| TASK05-HISTORY | 成功直後の履歴GETで質問・回答一致 | **未実測** |
+| TASK05-STOP | 停止時／キーなし時のAPI応答と起動、SDK/DB呼出抑止 | **未実測** |
+| TASK05-REG | TOP/TODO画面とTODO CRUD正常 | **未実測** |
+| TASK05-DEPLOY | 保護済みPreviewおよびProduction拒否 | **未実施（後続のTASK-12）** |
+
+### 総合判定
+
+**TASK-05：ソースコード実装をGitHubに反映済み、依存lockfileとローカル・実Gemini・DB・回帰試験は未完了。次工程への受入合格は保留。**
+
+実際のGemini通信やNeon書込み、機密情報・デプロイ設定の変更は、今回のGitHubコード反映では行っていない。
