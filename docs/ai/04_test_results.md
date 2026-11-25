@@ -2,8 +2,8 @@
 
 - 対象リポジトリ：`hyosetsu/Ai-drive-Project2026`
 - 対象ブランチ：`feature/ai-app`
-- 記録対象：**TASK-01 共通ひな型・デモ停止ゲートのみ**
-- 実施日：2026-11-18（日本時間）
+- 記録対象：**TASK-01〜TASK-03（各工程の実装と検証結果）**
+- 実施日：2026-11-18、2026-11-25（日本時間）
 - 記録根拠：開発者が会話で提示したPowerShellのビルド結果、curl.exeのHTTP応答、画面・TODO操作の報告
 - 判定方針：実測・操作報告・静的確認・未実施を区別する。未測定の値を補完しない。
 
@@ -152,26 +152,42 @@ GitHubの`feature/ai-app`において、着手前の`index.ts`にはAI Router登
 - 仕様差分：現行のHTTP成功形は、この開発で後から指定された`{ "success": true, "items": [] }`を採用。古い`spec.md`や`tasks.md`に残る`data: []`とは異なる。Modelの公開項目は`id`（文字列）、`prompt`、`response`、`createdAt`。
 - `@google/genai`：開発者からローカルで`npm install @google/genai`実施済みと報告あり。ただし、この工程ではGemini APIを呼び出さない。GitHub側の`package.json`では、確認時点で同SDKの依存記載は未確認。インストール後のローカル差分やビルドは本工程で実測していない。
 
-### 現状のコード確認
+### 実測結果（2026-11-25、日本時間）
 
-| 項目 | 実装と確認内容 | 判定 |
-| --- | --- | --- |
-| デモ停止を優先 | `aiRouter`がゲートの後で`GET /history`を登録 | **静的確認済み** |
-| 固定SELECT | `ORDER BY created_at DESC, id DESC LIMIT 20` | **静的確認済み** |
-| 0件の成功応答 | `200`、`success:true`、`items:[]` | **TASK-02でHTTP実測済み** |
-| DB→公開項目 | `id/prompt/response/createdAt`への変換、日時はISO、IDは文字列 | **コード静的確認済み／非空のHTTP応答は未検証** |
-| DB障害時 | 500/503 `HISTORY_UNAVAILABLE`、0件成功へフォールバックしない | **コード静的確認済み／故障試験未実施** |
-| 停止時 | HTTP 503 `DEMO_DISABLED` | **TASK-02でHTTP実測済み** |
-| TOP・TODO回帰 | 画面・CRUDの正常動作 | **TASK-02で操作報告済み** |
+開発者がNeonの隔離テスト用ブランチ`test-ai-history-task03`とローカルPowerShellで確認した内容。HTTP日時は応答ヘッダーのUTCをJSTへ換算した。DB接続文字列・認証情報・requestIdの値は転記しない。
 
-### TASK-03で未実施の試験
+| 試験ID | 条件・期待結果 | 報告された実測結果 | 判定 |
+| --- | --- | --- | --- |
+| TASK03-01 | デモ停止中の`GET /api/ai/history`は503 `DEMO_DISABLED` | HTTP **503**、`success:false`、`DEMO_DISABLED`、`no-store`。11/18 16:14:03 JST | **合格** |
+| TASK03-02 | ローカル許可・履歴0件なら200 `{success:true,items:[]}` | HTTP **200**、`{"success":true,"items":[]}`、`no-store`。11/18 16:17:31 JST | **合格** |
+| TASK03-03 | 隔離DBに25件の同時刻履歴を用意し、実APIから最新20件のみ取得 | Neon SQL Editorで`COUNT(*)=25`、接続設定修正後`success=True`、`Count=20` | **合格（実DB・HTTP統合）** |
+| TASK03-04 | 同時刻の並びを`created_at DESC,id DESC`とする | `FirstId=25`、`LastId=6`、`IdDescending=True`。HTTP本文でも25→6の20件を確認 | **合格** |
+| TASK03-05 | `id`を文字列として公開 | `IdIsString=True`、HTTP本文`"id":"25"`等 | **合格** |
+| TASK03-06 | DB列`prompt/response_text/created_at`を`prompt/response/createdAt`へ変換 | `AllFieldsValid=True`、先頭`TASK03_TEST_25`／`TASK03_RESPONSE_25`／`2026-11-18T00:00:00.000Z`、HTTP本文と一致 | **合格** |
+| TASK03-07 | DB接続不能時は履歴0件成功ではなく`HISTORY_UNAVAILABLE` | 無効なローカルDB接続先に切替後、HTTP **503**、`success:false`、`HISTORY_UNAVAILABLE`、`no-store`。11/25 13:41:44 JST | **合格** |
+| TASK03-08 | 障害試験後にテスト用DBへ復旧し再び正常取得 | 環境復旧手順を実行、`DatabaseUrlConfigured=True`・`AI_DEMO_ENABLED=true`・`NODE_ENV=development`、HTTP **200**、20件（ID25→6）。11/25 13:43:46 JST | **合格（復旧先の動作）** |
 
-1. 実DBに21件以上のテスト履歴を用意し、HTTP経由で最新20件・同時刻ID降順を確認する試験。TASK-02でのWITH句25件はSQL順序確認のみであり、HTTP統合試験とは区別する。
-2. 非空履歴に対する公開JSONの`id`文字列、`prompt`、`response`、`createdAt`の実測。安全整数上限を超えるIDも未試験。
-3. DBが利用不能な場合に`HISTORY_UNAVAILABLE`を返し、`items: []`で成功させない故障試験。
-4. 停止ゲートでDB SELECTが0回であることのスパイ計測。
-5. 本工程の変更取得後の`npm run build`、TODOを含む追加回帰。
+補足：
 
-**判定：TASK-03の機能は実装済み。既存のTASK-02で確認した空履歴・停止時応答は合格。非空履歴の順序、公開項目変換、DB障害などのTASK-03受入試験は未完了。**
+- 25件のデータはNeon隔離テスト用DBに登録された。通常DBへの追加・削除はこの作業記録の対象外。SQL Editorで25件を確認してもAPIが0件だった時点では接続先未一致の可能性があり、その後`DATABASE_URL`を正しく設定した同じPowerShellからサーバーを起動して20件取得を実測した。
+- `id`の具体値25→6はこのテストでの実測値。採番値が常に1〜25になるという一般仕様ではない。
+- `createdAt`の先頭値`2026-11-18T00:00:00.000Z`は実際のAPI応答から転記。25件は同じ作成日時で、同時刻のID降順も確認できた。
+- DB障害試験はNeonを停止せず、ローカルプロセスの接続先を一時的に到達不能なアドレスへ変えたもの。DB障害による`success:true,items:[]`への誤変換は起こらなかった。
+- 復旧後の`DatabaseUrlConfigured=True`は設定有無の証跡で、接続先識別そのものの証明ではないが、同じ25件のテスト履歴を再び取得できたことを確認した。
 
-DBへのSQL実行、データ追加・削除、環境変数登録、公開設定の変更は行っていない。TASK-04（模擬回答保存）・TASK-05（Gemini接続）は未着手。
+### 未検証・保留事項（合格扱いにしない）
+
+| 項目 | 状態・理由 |
+| --- | --- |
+| ゲート停止時のDB SELECT実行回数 | **未実施**。ルート順序の静的確認と503応答はあるが、スパイによる呼出0回の計測なし |
+| 64ビットBIGINTの安全整数範囲を超えるID | **未実施**。ID文字列での返却は実測済みだが境界値は未試験 |
+| 追加のDB障害分類（SQLSTATE別） | **未実施**。今回の到達不能DBでの503のみ実測 |
+| TASK-03変更取得後のビルド／TOP・TODO詳細回帰 | **今回の新たな実測報告なし**。以前のTASK-02合格結果を流用して新たな検証済みと扱わない |
+| 実際の公開Production／Preview | **未実施**。公開設定は変更していない |
+| Neonブランチの自動削除・DB接続資格情報のローテーション完了 | **未確認**。接続文字列が会話に露出したため、資格情報の無効化・再発行は別途必須 |
+
+### 総合判定
+
+**TASK-03：履歴API実装済み。デモ停止・空履歴・隔離DB25件からの最新20件・同時刻ID降順・公開JSON変換・DB接続障害・復旧の主要受入検証に合格。**
+
+上表の未検証事項は保留として記録する。今回の検証記録更新ではDB実行・コード変更・公開設定変更を行っていない。TASK-04（模擬回答保存）・TASK-05（Gemini接続）は未着手。
