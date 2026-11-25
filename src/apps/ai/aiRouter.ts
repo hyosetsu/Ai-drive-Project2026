@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import { aiFinalErrorHandler, sendAiError } from './aiError';
-import { askAiMock, listAiHistory } from './aiController';
+import { askAi, listAiHistory } from './aiController';
 import {
   aiRequestContext,
   aiDemoGate,
@@ -10,16 +10,16 @@ import {
 
 export const aiRouter = Router();
 
-// 本文解析・DBアクセス・SDK初期化よりも先にデモ停止を判定。
+// The demo gate must run before JSON parsing, Gemini SDK loading, or DB access.
 aiRouter.use(aiRequestContext);
 aiRouter.use(aiDemoGate);
 aiRouter.use(aiEncodingGuard);
 aiRouter.use(aiJsonContentTypeGuard);
 
-// TASK-04: 質問APIだけに16KiBのJSON解析を適用し、ローカル検証用模擬回答を保存。
-aiRouter.post('/ask', express.json({ limit: 16384, strict: true }), askAiMock);
+// TASK-05: send one validated question to Gemini; return 201 only after INSERT.
+aiRouter.post('/ask', express.json({ limit: 16384, strict: true }), askAi);
 
-// TASK-03: 履歴取得API。デモ停止ゲート通過後にのみDBを照会する。
+// History is queried only after passing the demo gate.
 aiRouter.get('/history', listAiHistory);
 
 aiRouter.use((_req, res) => {
