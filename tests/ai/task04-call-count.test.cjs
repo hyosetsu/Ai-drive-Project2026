@@ -1,6 +1,6 @@
 'use strict';
 
-// TASK-04 isolated call-count tests: no Neon connection or Gemini SDK.
+// TASK-05 isolated call-count regression tests: no Neon connection or Gemini SDK.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -53,6 +53,7 @@ function response() {
 function setup() {
   const calls = { service: 0, insert: 0, select: 0 };
   const values = [];
+  let serviceFailure = null;
   const fakeModel = {
     selectLatestAiHistory: async () => { calls.select++; return []; },
     insertAiHistory: async (prompt, answer) => {
@@ -66,10 +67,13 @@ function setup() {
       success: false, error: { code, message, requestId: res.locals.requestId },
     });
   };
+  class AiGenerationError extends Error { constructor(kind) { super(kind); this.kind = kind; } }
   const fakeService = {
-    generateMockAnswer: (_question) => {
+    AiGenerationError,
+    generateAiAnswer: async (_question) => {
       calls.service++;
-      return '固定模擬回答';
+      if (serviceFailure) throw serviceFailure;
+      return 'スタブ回答';
     },
   };
   const controller = loadTs('aiController.ts', {
@@ -82,7 +86,7 @@ function setup() {
     './aiError': { sendAiError },
   });
   const request = (body) => ({ body, socket: { remoteAddress: '127.0.0.1' } });
-  return { calls, values, controller, middleware, request };
+  return { calls, values, controller, middleware, request, failGemini: (error) => { serviceFailure = error; }, AiGenerationError };
 }
 
 test.after(() => {
@@ -92,10 +96,10 @@ test.after(() => {
   }
 });
 
-test('valid input calls mock service and INSERT once, no SELECT, responds 201', async () => {
+test('valid input calls Gemini service and INSERT once, no SELECT, responds 201', async () => {
   const { calls, values, controller, request } = setup();
   const res = response();
-  await controller.askAiMock(request({ question: '  TASK04_SPY  ' }), res);
+  await controller.askAi(request({ question: '  TASK04_SPY  ' }), res);
   assert.equal(res.statusCode, 201);
   assert.equal(res.payload.success, true);
   assert.deepEqual(calls, { service: 1, insert: 1, select: 0 });
@@ -113,7 +117,7 @@ for (const [label, question, expectedStatus] of [
   test('invalid input ' + label + ': no service or DB calls', async () => {
     const { calls, controller, request } = setup();
     const res = response();
-    await controller.askAiMock(request({ question }), res);
+    await controller.askAi(request({ question }), res);
     assert.equal(res.statusCode, expectedStatus);
     assert.deepEqual(calls, { service: 0, insert: 0, select: 0 });
   });
@@ -126,7 +130,7 @@ test('disabled gate blocks handler before service or DB call', async () => {
   try {
     let passed = false;
     middleware.aiDemoGate(request({ question: 'test' }), res, () => { passed = true; });
-    if (passed) await controller.askAiMock(request({ question: 'test' }), res);
+    if (passed) await controller.askAi(request({ question: 'test' }), res);
     assert.equal(passed, false);
     assert.equal(res.statusCode, 503);
     assert.equal(res.payload.error.code, 'DEMO_DISABLED');
@@ -136,7 +140,29 @@ test('disabled gate blocks handler before service or DB call', async () => {
   }
 });
 
-test('mock service source has no Gemini SDK import or network access', () => {
+test('Gemini service source has no Gemini SDK import or network access', () => {
   const source = fs.readFileSync(path.join(srcDir, 'aiService.ts'), 'utf8');
-  assert.doesNotMatch(source, /@google\/genai|generateContent|fetch\s*\(|https?\s*\.\s*request/);
+  assert.match(source, /retryOptions:\s*\{\s*attempts:\s*1\s*\}/);
+  assert.match(source, /automaticContinuation:\s*false/);
+  assert.match(source, /await import\('@google\/genai'\)/);
+});
+
+test('Gemini failure sends 502 and does not INSERT', async () => {
+  const { calls, controller, request, failGemini, AiGenerationError } = setup();
+  failGemini(new AiGenerationError('unavailable'));
+  const res = response();
+  await controller.askAi(request({ question: 'test' }), res);
+  assert.equal(res.statusCode, 502);
+  assert.equal(res.payload.error.code, 'AI_UNAVAILABLE');
+  assert.deepEqual(calls, { service: 1, insert: 0, select: 0 });
+});
+
+test('Gemini timeout sends 504 and does not INSERT', async () => {
+  const { calls, controller, request, failGemini, AiGenerationError } = setup();
+  failGemini(new AiGenerationError('timeout'));
+  const res = response();
+  await controller.askAi(request({ question: 'test' }), res);
+  assert.equal(res.statusCode, 504);
+  assert.equal(res.payload.error.code, 'AI_TIMEOUT');
+  assert.deepEqual(calls, { service: 1, insert: 0, select: 0 });
 });
