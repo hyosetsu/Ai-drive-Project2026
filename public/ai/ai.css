@@ -1,0 +1,26 @@
+:root { color-scheme: light; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.65; color: #1e293b; background: #f4f7fb; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.page { width: min(860px, calc(100% - 32px)); margin: 32px auto 64px; }
+.page-header { margin-bottom: 24px; }
+nav { display: flex; gap: 18px; }
+a { color: #1856a2; }
+h1 { margin: 12px 0 0; font-size: 1.9rem; }
+.lead, .hint, .footnote { color: #556579; }
+.lead { margin: 4px 0 0; }
+.panel { background: #fff; border: 1px solid #dce3ed; border-radius: 14px; padding: 24px; }
+.section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+h2 { margin: 0; font-size: 1.3rem; }
+.hint { margin: 2px 0 0; font-size: .9rem; }
+button { border: 1px solid #bec9d7; background: #fff; border-radius: 8px; color: #1e293b; padding: 8px 14px; cursor: pointer; font: inherit; }
+button:hover:not(:disabled) { background: #eff4fa; }
+button:disabled { opacity: .55; cursor: wait; }
+#history-status { color: #516074; }
+.error { color: #a32c2c; }
+.history-list { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 14px; }
+.history-item { border: 1px solid #e0e7ee; border-radius: 10px; padding: 16px; overflow-wrap: anywhere; }
+.history-date { color: #64748b; font-size: .84rem; }
+.history-item h3 { font-size: .9rem; margin: 12px 0 4px; }
+.history-text { white-space: pre-wrap; margin: 0; }
+.footnote { font-size: .9rem; }
+@media (max-width: 600px) { .page { margin-top: 16px; } .panel { padding: 16px; } }
