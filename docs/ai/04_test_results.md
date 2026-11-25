@@ -191,3 +191,41 @@ GitHubの`feature/ai-app`において、着手前の`index.ts`にはAI Router登
 **TASK-03：履歴API実装済み。デモ停止・空履歴・隔離DB25件からの最新20件・同時刻ID降順・公開JSON変換・DB接続障害・復旧の主要受入検証に合格。**
 
 上表の未検証事項は保留として記録する。今回の検証記録更新ではDB実行・コード変更・公開設定変更を行っていない。TASK-04（模擬回答保存）・TASK-05（Gemini接続）は未着手。
+
+
+---
+
+## TASK-04：模擬回答生成・質問回答の同一行保存（実装記録）
+
+- 対象ブランチ：`feature/ai-app`
+- 対応：`REQ-AI-F002/F003/F005/F009/D001/D005/D006/N003`、`DES-AI-001/002/004/005/006/008`
+- 対象：`src/apps/ai/aiService.ts`（新規）、`aiController.ts`、`aiRouter.ts`、`aiError.ts`（更新）。`aiModel.ts`はTASK-02の`insertAiHistory`（パラメータ付き単一行INSERT）を再利用し、変更していない。
+- 状態：**コードのGitHub反映・再取得による静的確認済み。ローカルのビルド・HTTP試験・DBのINSERT実測は未実施。**
+
+### 実装内容と設計上の注意
+
+1. `POST /api/ai/ask`を、既存の停止ゲート→Content-Encoding/Content-Type検査→16KiBのJSON解析→Controllerの順に接続。既存TODOのRouterやDB接続設定は変更しない。
+2. 模擬回答は`generateMockAnswer`に固定したテスト専用の日本語文。Gemini SDKのimport・初期化・外部AIアクセスを行わない。
+3. 模擬回答の保存を許可するのは、`NODE_ENV=development`、`VERCEL_ENV`未設定、`AI_DEMO_ENABLED=true`、接続元ソケットのアドレスがループバックの場合のみ。既存のゲートも先に判定する。実際のホスティング保護が確証されない状態でPreview/Productionのデモを有効にしない。
+4. JSON本文の型・`question`文字列・trim後の1〜2,000 Unicodeコードポイント・NULを検証し、失敗時は400 `INVALID_BODY`／422 `VALIDATION_ERROR`。検証不合格では模擬回答・DB INSERTを呼ばない。
+5. 入力検証→模擬回答→`insertAiHistory`の1回INSERT→成功時だけ201 `{success:true,data:{id,prompt,response,createdAt}}`。TASK-02で採用した公開項目名を維持し、歴史APIも`items`を維持。
+6. INSERT例外で、PostgreSQLが明示した`severity=ERROR`かつSQLSTATEクラス22/23/42/P0の拒否は500 `SAVE_FAILED`、それ以外は保存結果不明として503 `SAVE_RESULT_UNKNOWN`。成功に見せず、回答本文や秘密値をエラー応答に含めず、INSERTを自動再試行しない。分類は隔離DBでの故障注入で別途検証する。
+7. 設計の旧例は`question/answer/created_at`と`data`を使用しているが、現行TASK-02/03の確定実装`prompt/response_text`と`items`に整合させた。POSTの送信フィールドは引き続き`question`。
+
+### 試験予定（未実測）
+
+| 試験ID | 期待結果 | 現状 |
+| --- | --- | --- |
+| TASK04-BUILD | `npm run build`が成功 | **未実施** |
+| TASK04-01 | 隔離テスト用DBで有効な`question`をPOST→201、回答・ID・日時を受け取る | **未実施** |
+| TASK04-02 | POSTの保存行とGET履歴・DB SELECTで質問と回答が一致し、1リクエストで1行だけ増える | **未実施** |
+| TASK04-03 | 前後空白除去、Unicodeコードポイント境界（1/2000/2001）、入力型不正・空白のみを検証 | **未実施** |
+| TASK04-04 | 無効入力時、模擬Service/DB INSERTは0回（スタブ・スパイ） | **未実施** |
+| TASK04-05 | 停止ゲートの503、Production相当・非ローカルの模擬回答拒否 | **未実施** |
+| TASK04-06 | DBの明示的INSERT拒否→500 `SAVE_FAILED`、接続断等→503 `SAVE_RESULT_UNKNOWN` | **未実施** |
+| TASK04-07 | 保存失敗時の秘密情報・回答本文の非露出、AI外部通信なし | **静的確認のみ。実行時未検証** |
+| TASK04-08 | TOP/TODOの一覧・登録・更新・削除、DBサンプル等の回帰 | **未実施** |
+
+### 総合判定
+
+**TASK-04：コード実装・GitHub反映済み、受入試験未完了。** 検証は既存データを保護する隔離DBでのみ行う。GitHub上のSQLや既存データの削除・TRUNCATE・テーブル再作成、Neonの接続資格情報変更、公開設定変更を今回の実装処理では行っていない。TASK-05の実AI接続は未着手。
