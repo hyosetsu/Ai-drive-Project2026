@@ -1,14 +1,13 @@
 import { RequestHandler } from 'express';
 import { insertAiHistory, selectLatestAiHistory } from './aiModel';
 import { sendAiError } from './aiError';
-import { generateMockAnswer } from './aiService';
+import { AiGenerationError, generateAiAnswer } from './aiService';
 
 export const listAiHistory: RequestHandler = async (_req, res) => {
   try {
     const items = await selectLatestAiHistory();
     res.status(200).json({ success: true, items });
   } catch (err: unknown) {
-    // Do not expose query text, connection details, or raw exceptions.
     const code = typeof err === 'object' && err !== null && 'code' in err
       ? (err as { code?: unknown }).code : undefined;
     const unavailable = typeof code === 'string' &&
@@ -22,8 +21,9 @@ export const listAiHistory: RequestHandler = async (_req, res) => {
   }
 };
 
-// The mocked ask endpoint must not be usable from a remote client or deployed service.
-function isLocalMockRequest(remoteAddress: string | undefined): boolean {
+// Real AI is also restricted to local development until Preview's protection
+// method is verified; never grant access just by setting AI_DEMO_ENABLED.
+function isLocalAiRequest(remoteAddress: string | undefined): boolean {
   return process.env.NODE_ENV === 'development'
     && process.env.VERCEL_ENV === undefined
     && process.env.AI_DEMO_ENABLED === 'true'
@@ -32,8 +32,8 @@ function isLocalMockRequest(remoteAddress: string | undefined): boolean {
       || remoteAddress === '::ffff:127.0.0.1');
 }
 
-export const askAiMock: RequestHandler = async (req, res) => {
-  if (!isLocalMockRequest(req.socket.remoteAddress)) {
+export const askAi: RequestHandler = async (req, res) => {
+  if (!isLocalAiRequest(req.socket.remoteAddress)) {
     sendAiError(res, 503, 'DEMO_DISABLED', 'AI機能は現在利用できません');
     return;
   }
@@ -56,19 +56,27 @@ export const askAiMock: RequestHandler = async (req, res) => {
     return;
   }
 
-  // Only after successful validation: mock Service -> single INSERT -> 201.
-  const answer = generateMockAnswer(question).trim();
-  if (!answer) {
-    sendAiError(res, 502, 'AI_UNAVAILABLE', 'AIの回答を取得できませんでした');
-    return;
+  // Only after successful validation: one Gemini request, then one DB INSERT.
+  let answer: string;
+  try {
+    answer = (await generateAiAnswer(question)).trim();
+    if (!answer) {
+      sendAiError(res, 502, 'AI_UNAVAILABLE', 'AIの回答を取得できませんでした');
+      return;
+    }
+  } catch (err: unknown) {
+    if (err instanceof AiGenerationError && err.kind === 'timeout') {
+      sendAiError(res, 504, 'AI_TIMEOUT', 'AIの応答が制限時間を超えました');
+    } else {
+      sendAiError(res, 502, 'AI_UNAVAILABLE', 'AIの回答を取得できませんでした');
+    }
+    return; // failed Gemini request must never reach INSERT
   }
 
   try {
     const data = await insertAiHistory(question, answer);
     res.status(201).json({ success: true, data });
   } catch (err: unknown) {
-    // Only a definite PostgreSQL INSERT rejection is classified as SAVE_FAILED.
-    // All unrecognized/transport errors are result-unknown; never auto-retry.
     const code = typeof err === 'object' && err !== null && 'code' in err
       ? (err as { code?: unknown }).code : undefined;
     const severity = typeof err === 'object' && err !== null && 'severity' in err
