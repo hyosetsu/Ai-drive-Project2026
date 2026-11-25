@@ -2,7 +2,7 @@
 
 - 対象リポジトリ：`hyosetsu/Ai-drive-Project2026`
 - 対象ブランチ：`feature/ai-app`
-- 記録対象：**TASK-01〜TASK-04（各工程の実装と検証結果）**
+- 記録対象：**TASK-01〜TASK-05（各工程の実装と検証結果）**
 - 実施日：2026-11-18、2026-11-25（日本時間）
 - 記録根拠：開発者が会話で提示したPowerShellのビルド結果、curl.exeのHTTP応答、画面・TODO操作の報告
 - 判定方針：実測・操作報告・静的確認・未実施を区別する。未測定の値を補完しない。
@@ -278,38 +278,84 @@ GitHubの`feature/ai-app`において、着手前の`index.ts`にはAI Router登
 
 ---
 
-## TASK-05：実Gemini API接続（実装記録・検証待ち）
+## TASK-05：実Gemini API接続（実装・検証記録）
 
-- 対象ブランチ：`feature/ai-app`、実装日：2026-11-25（日本時間）
+- 対象ブランチ：`feature/ai-app`
+- 実施日：**2026-11-25（日本時間）**
 - 対応：`REQ-AI-F004/F005/F010/D006/N002/N007`、`DES-AI-001/002/004/007/008`
-- 対象：`package.json`、`src/apps/ai/aiService.ts`、`aiController.ts`、`aiRouter.ts`、`aiError.ts`、隔離テストファイル。既存`aiModel.ts`・TODO・共通DB設定は変更しない。
-- SDK：公式`@google/genai` 3.6.1（Node.js 22以上が必要）。環境変数名`GEMINI_API_KEY`、モデルID`gemini-2.5-flash`を採用。固定システムプロンプトなし。質問は当該1件のみ送信し、過去履歴は渡さない。
-- `package-lock.json`：**未更新**。外部レジストリへのアクセスが可能なローカル環境で`npm install`を実行して正式なlockfileを生成し、同じブランチにコミットする必要がある。lockfile不一致の状態で`npm ci`を実行しない。
+- 実装・確認対象：`package.json`、`package-lock.json`、`src/apps/ai/aiService.ts`、`aiController.ts`、`aiRouter.ts`、`aiError.ts`、`tests/ai/task04-call-count.test.cjs`、Neon隔離テストDB。既存TODO・共有`db.ts`は変更しない。
+- 記録根拠：開発者が提示した`npm`・Nodeテスト・PowerShell HTTP出力、Neon SQL Editor照会、GitHubの実装・依存ファイル確認。HTTPで未提示のステータス値、Gemini実送信回数、未実施のブラウザ操作は補完しない。
+- 採用構成：`@google/genai@3.6.1`、環境変数名`GEMINI_API_KEY`、**最終採用モデル`gemini-3.5-flash-lite`**。固定システムプロンプトはなく、当該質問1件だけを送信し過去履歴は渡さない。
+- 成功JSON：`POST /api/ai/ask` は `{success:true,data:{id,prompt,response,createdAt}}`、履歴GETは `{success:true,items:[...]}`。旧設計文書の `question/answer`／`data[]` と名称差分があるため後続UIの実装時に現行形へ合わせる。
 
-### 実装内容
+### 実装内容と採用判断
 
-1. デモゲート・入力検証を通過した場合だけServiceを呼び、SDKを遅延import・初期化。環境変数にキーがなければAI呼出せず502を返す。キー値は記録・応答しない。
-2. `generateContent`を1回呼び出す。SDKリトライ設定`retryOptions.attempts=1`（初回呼出を含む1回、再試行0回）、`automaticContinuation=false`（暗黙の追加呼出を抑止）。
-3. 暫定SDKタイムアウト`30,000ms`。SDKのタイムアウト分類は504 `AI_TIMEOUT`、その他の取得失敗・空白回答は502 `AI_UNAVAILABLE`。タイムアウト30秒は未確定で、TASK-09で実環境と照合する。
-4. Gemini回答取得・trim成功後に既存`insertAiHistory(question, answer)`を1回だけ呼ぶ。INSERT成功後のみ201・保存された回答を返す。確定的DB拒否は500 `SAVE_FAILED`、保存結果不明は503 `SAVE_RESULT_UNKNOWN`。自動再送・自動INSERT再試行は行わない。
-5. Production・Preview未認証を許可しない既存のゲートを維持。ローカルdevelopment/ループバック以外では実AI呼出を拒否する。
-6. スパイテストは新しいService名に対応し、正常時Gemini1回/INSERT1回、無効入力とゲート停止時0回、AI失敗時INSERT0回などを検査するよう更新。
+1. ゲート・型・空白除去・1〜2,000 Unicodeコードポイント検証を通過してからGemini SDKを遅延import・初期化。`NODE_ENV=development`、`AI_DEMO_ENABLED=true`、`VERCEL_ENV`未設定、ループバック接続の場合だけ実AIへ進む。キー未設定時はAIを呼ばず502 `AI_UNAVAILABLE`。
+2. Gemini `generateContent`の呼出しを1回に限定するコード。SDKオプション`retryOptions: {attempts:1}`、`automaticContinuation:false`で自動再試行・追加生成を抑制。暫定タイムアウトは30秒（TASK-09で再検討）。空白回答・一般AIエラーは502 `AI_UNAVAILABLE`、タイムアウト判定は504 `AI_TIMEOUT`。
+3. AI回答取得後のパラメータ化したINSERT成功時のみHTTP 201。AI失敗ならINSERTへ進まず、保存失敗は確定500 `SAVE_FAILED`／結果不明503 `SAVE_RESULT_UNKNOWN`に分類。例外の生情報、キーや接続URLは公開応答に含めない。
+4. **モデル変更理由**：初期モデル`gemini-2.5-flash`は`models.get`に成功したが、直接`generateContent`は404 `ApiError`。このモデルでのExpress POSTも502 `AI_UNAVAILABLE`となり、隔離DBの件数は25件のまま・該当質問0行。代替`gemini-3.5-flash-lite`でモデル情報取得と直接回答生成に成功したため、`aiService.ts`のモデルIDのみを更新（コミット`15e938a`）。404の内部原因（利用制限など）は未確定。
+5. 依存更新では`npm install`後の監査でHigh `body-parser`、Moderate `qs`の2件を検出。`npm audit fix --dry-run`→`npm audit fix`を実施し、`body-parser@2.4.0`・`qs@6.17.1`へ更新、全体・本番用とも脆弱性0件となった。`package-lock.json`をGitHubへコミットしたことを確認済み。`package.json`にはローカル差分なし。
 
-### 予定試験（実測が提出されるまで合格扱いにしない）
+### 実測結果：依存・ビルド・スタブ／スパイ
 
-| 試験ID | 期待結果 | 現状 |
-| --- | --- | --- |
-| TASK05-DEPS | `npm install`によりSDKとlockfileの依存整合 | **未実施、lockfile更新待ち** |
-| TASK05-BUILD | `npm run build`がエラーなく完了 | **未実測** |
-| TASK05-SPY | `node --test tests/ai/task04-call-count.test.cjs`の全件合格、正常1回、無効入力0回、AI失敗時INSERT0回 | **未実測**（既存のTASK-04テスト結果を流用しない） |
-| TASK05-REAL | 隔離DB＋ローカル開発環境で有効な1質問→実Gemini応答・1行保存・201 | **未実測。キー値・回答全文は記録しない** |
-| TASK05-HISTORY | 成功直後の履歴GETで質問・回答一致 | **未実測** |
-| TASK05-STOP | 停止時／キーなし時のAPI応答と起動、SDK/DB呼出抑止 | **未実測** |
-| TASK05-REG | TOP/TODO画面とTODO CRUD正常 | **未実測** |
-| TASK05-DEPLOY | 保護済みPreviewおよびProduction拒否 | **未実施（後続のTASK-12）** |
+| 試験ID | 条件・期待結果 | 開発者が提示した実測結果 | 判定 |
+| --- | --- | --- | --- |
+| TASK05-DEPS-01 | `npm install`完了、SDK 3.6.1が使用可能 | `npm install`正常終了、`npm ls`で`@google/genai@3.6.1`を確認。lockfileをブランチへコミット | **合格** |
+| TASK05-DEPS-02 | npm監査の検出問題が解消 | 初回`npm audit`・`--omit=dev`はHigh 1件、Moderate 1件。`npm audit fix`後、両コマンドとも`found 0 vulnerabilities` | **合格（実施時点の監査）** |
+| TASK05-DEPS-03 | 修正された依存の確認 | `npm ls body-parser qs @google/genai`で`body-parser@2.4.0`、`qs@6.17.1`、`@google/genai@3.6.1`。GitHub lockfileでも一致 | **合格** |
+| TASK05-BUILD | `npm run build`がエラーなく終了 | `> tsc`後、エラーなしで終了。依存修正後も再実施・成功 | **合格** |
+| TASK05-SPY-01 | 有効入力でGemini Service1回、INSERT1回、SELECT0回・201 | スタブ・スパイでアサーション成功 | **合格（単体テスト）** |
+| TASK05-SPY-02 | 空文字・空白・2,001コードポイント・数値・項目なしはService/DB0回 | 5ケースとも成功 | **合格（単体テスト）** |
+| TASK05-SPY-03 | デモ停止時は呼出0回・503、AI失敗時はINSERT0回で502、タイムアウト時はINSERT0回で504 | 各アサーション成功 | **合格（単体テスト）** |
+| TASK05-SPY-04 | SDKの遅延import・自動再試行禁止・自動継続禁止 | ソースに対する静的検査に成功 | **合格（静的検査）** |
+| TASK05-SPY-ALL | `node --test tests/ai/task04-call-count.test.cjs` | 依存修正後も**tests 10、pass 10、fail 0、約193ms** | **合格** |
+
+### 実測結果：隔離DB・Gemini API・履歴照合
+
+| 試験ID | 条件・期待結果 | 開発者が提示した実測結果 | 判定 |
+| --- | --- | --- | --- |
+| TASK05-DB-PRE | 隔離NeonとExpressのデータが一致 | Neon `database_name=neondb`、`schema_name=public`、`history_count=25`、ID25/24/23。Express履歴取得で`Success=True`、20件、先頭ID25・`TASK03_TEST_25`、末尾ID6。POST前COUNT 25 | **合格（既知の隔離データ一致）** |
+| TASK05-KEY | キーなどの設定有無確認（値は非表示） | `DatabaseUrlConfigured=True`、`GeminiKeyConfigured=True`、`DemoEnabled=true`、`NodeEnv=development`、`VercelEnvConfigured=False` | **合格（設定有無）** |
+| TASK05-MODEL-OLD | 初期モデル`gemini-2.5-flash`で回答生成 | `models.get`は`Success:true`、しかし直接`generateContent`で**404 ApiError**、Express POSTでは**502 AI_UNAVAILABLE** | **旧モデルで生成失敗／原因は未特定** |
+| TASK05-DB-FAILED | Geminiエラー時はDBへ保存しない | 旧モデル失敗後に`after_count=25`・`task05_rows=0`をSQLで確認 | **合格（保存抑止）** |
+| TASK05-MODEL-NEW | 新モデル`gemini-3.5-flash-lite`で情報取得・回答生成 | `models.get`で`Success:true`・`models/gemini-3.5-flash-lite`、直接`generateContent`で`Success:true`、`HasAnswer:true`、`AnswerLength=104` | **合格（SDK直接実測）** |
+| TASK05-REAL | Expressから短い質問1件→Gemini回答→DB保存後のみ201 | `TASK05_REAL_AI_TEST_002：日本の首都を一言で答えてください。`を1回POSTし、**HTTP 201**、`success=True`、保存ID `27`、回答長2文字 | **合格（実AI／API／DB統合）** |
+| TASK05-DB-SAVE | 実DBに指定質問が1行保存され、前後COUNTが1増加 | NeonでID27の質問・`response_length=2`・`created_at=2026-11-25 06:17:52.053916+00`を確認。COUNT **25→26**、該当質問1行 | **合格** |
+| TASK05-HISTORY | 保存後の履歴GETでID・質問・回答一致 | `HistorySuccess=True`、`MatchCount=1`、`SavedIdMatches=True`、`AnswerMatches=True` | **合格** |
+
+補足：
+
+- ID27は実測された保存ID。25件から26件へ増えたことと両立し、IDENTITYに欠番がある可能性があるため、ID26の存在は推定しない。
+- 日時`2026-11-25 06:17:52.053916+00`はUTC表示（日本時間15:17:52.053916に相当）。回答本文は記録せず長さと比較結果のみ残す。
+- 最初の旧モデルでの失敗は、Express側の公開エラー502とSDK直接404から切り分けた。`models.get`が成功しても生成可能とは限らない。API利用制限などの具体的原因は未立証。
+- `retryOptions.attempts=1`と`automaticContinuation=false`は実装・静的テストで確認し、Geminiネットワークの実送信回数まではパケット等で測っていない。
+- 接続識別は既知の25件と履歴の一致に基づく。NeonのDB名`neondb`単独からブランチを確定したとは扱わない。共有DB・Productionへの書込みを意図的に実施していない。
+
+### 実測結果：TOP・TODO回帰
+
+| 試験ID | 条件・期待結果 | 開発者が提示した実測結果 | 判定 |
+| --- | --- | --- | --- |
+| TASK05-REG-01 | TOP `/` | `curl.exe -L -I`でHTTP **200** | **合格（HEAD応答）** |
+| TASK05-REG-02 | TODO `/todo` | **301 Location:/todo/** → 最終**200**（`curl -L -I`） | **合格（リダイレクト・HEAD応答）** |
+| TASK05-REG-03 | TODO一覧 | GET `/api/v1/todos`で**200**、`{"success":true,"data":[]}` | **合格** |
+| TASK05-REG-04 | TODO登録 | テスト用`TASK05_REGRESSION_TEST`を登録し`id=2`を取得 | **合格（操作結果）／HTTPコード未記録** |
+| TASK05-REG-05 | TODO完了更新 | PATCH後`completed=True` | **合格（操作結果）／HTTPコード未記録** |
+| TASK05-REG-06 | TODO削除と復旧 | DELETEがエラーなく終了、GET一覧`Success=True`・`Count=0`。登録前も空配列 | **合格（操作結果と復旧）／DELETEのHTTPコード未記録** |
+
+### 未検証・残事項（今回の合格に含めない）
+
+| 項目 | 状態・理由 |
+| --- | --- |
+| Geminiの実ネットワーク呼出回数 | **未計測**。ソースとスタブで1回呼出・自動再試行0設定は確認済み |
+| 実際のタイムアウト発生、SDK障害の複数分類、HTTP 504 | **未実施**。単体スタブで504を確認したのみ。TASK-09で扱う |
+| キー未設定時のHTTP応答を新しい実AIコードで直接確認 | **未実施**。キー未設定判定のコード確認と失敗スタブはあるが、実HTTPは未計測 |
+| TASK-05変更後のProduction相当／保護済みPreview拒否・非ループバック拒否 | **未実施**。過去TASK-01/04での停止確認とは区別する。TASK-12で実環境検証 |
+| TOP・TODOの実ブラウザ描画 | **TASK-05では未報告**。HEADレスポンスとTODO CRUDは確認済み |
+| TODO異常系、DBサンプル、AI JSON上限・不正本文 | **未実施**。後続のTASK-08/10で確認 |
+| 共有DB・Productionの設定変更、Gemini/Neon資格情報ローテーション | **今回の検証では変更しない**。以前に接続文字列が会話へ露出したため資格情報のローテーション完了は別途確認が必要 |
 
 ### 総合判定
 
-**TASK-05：ソースコード実装をGitHubに反映済み、依存lockfileとローカル・実Gemini・DB・回帰試験は未完了。次工程への受入合格は保留。**
+**TASK-05：実装済み。SDK導入と依存脆弱性2件の修正、TypeScriptビルド、隔離スタブ・スパイ10件、Gemini 3.5 Flash-Lite実回答、隔離Neonへの1件INSERT、HTTP 201、履歴GET照合、TOP/TODO主要回帰の受入試験に合格。**
 
-実際のGemini通信やNeon書込み、機密情報・デプロイ設定の変更は、今回のGitHubコード反映では行っていない。
+追加のネットワーク計測・実故障注入・公開環境の検証等は上表のとおり保留。**次工程TASK-06（履歴UI）の実装へ進行可能**とする。今回の文書更新でアプリ実装・DB内容・環境変数・デプロイ設定は変更していない。
