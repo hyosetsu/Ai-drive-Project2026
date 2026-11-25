@@ -1,6 +1,6 @@
 import express, { Router } from 'express';
 import { aiFinalErrorHandler, sendAiError } from './aiError';
-import { listAiHistory } from './aiController';
+import { askAiMock, listAiHistory } from './aiController';
 import {
   aiRequestContext,
   aiDemoGate,
@@ -16,11 +16,8 @@ aiRouter.use(aiDemoGate);
 aiRouter.use(aiEncodingGuard);
 aiRouter.use(aiJsonContentTypeGuard);
 
-// AIの質問APIだけに16KiBのJSON解析を適用。TODOの10KB設定は変更しない。
-aiRouter.post('/ask', express.json({ limit: 16384, strict: true }), (_req, res) => {
-  // TASK-01では質問・回答処理を実装しない。
-  sendAiError(res, 404, 'NOT_FOUND', '指定されたURLは存在しません');
-});
+// TASK-04: 質問APIだけに16KiBのJSON解析を適用し、ローカル検証用模擬回答を保存。
+aiRouter.post('/ask', express.json({ limit: 16384, strict: true }), askAiMock);
 
 // TASK-03: 履歴取得API。デモ停止ゲート通過後にのみDBを照会する。
 aiRouter.get('/history', listAiHistory);
