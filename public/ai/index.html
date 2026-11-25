@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="referrer" content="no-referrer">
-  <title>AI質問アプリ | 履歴</title>
+  <title>AI質問アプリ | 質問・履歴</title>
   <link rel="stylesheet" href="/ai/ai.css">
   <script src="/ai/app.js" defer></script>
 </head>
@@ -16,8 +16,25 @@
         <a href="/todo/">TODO</a>
       </nav>
       <h1>AI質問アプリ</h1>
-      <p class="lead">質問と回答の履歴を確認できます。</p>
+      <p class="lead">質問の送信と、質問・回答の履歴を確認できます。</p>
     </header>
+
+    <section class="panel ask-panel" aria-labelledby="ask-heading">
+      <h2 id="ask-heading">AIに質問する</h2>
+      <form id="ask-form">
+        <label for="question-input">質問内容（1〜2,000文字）</label>
+        <textarea id="question-input" name="question" rows="5" required
+          aria-describedby="question-hint" placeholder="質問を入力してください"></textarea>
+        <p id="question-hint" class="hint">前後の空白を除いて判定します。質問は今回の1件だけ送信されます。</p>
+        <button type="submit" id="ask-submit">送信する</button>
+      </form>
+      <p id="ask-status" role="status" aria-live="polite"></p>
+      <p id="ask-error" class="error" role="alert" hidden></p>
+      <section id="answer-section" class="answer-section" aria-labelledby="answer-heading" hidden>
+        <h3 id="answer-heading">AIの回答</h3>
+        <p id="answer-text" class="history-text"></p>
+      </section>
+    </section>
 
     <section class="panel" aria-labelledby="history-heading">
       <div class="section-heading">
@@ -32,7 +49,6 @@
       <p id="history-error" class="error" role="alert" hidden></p>
       <ol id="history-list" class="history-list" aria-label="質問・回答の履歴"></ol>
     </section>
-    <p class="footnote">質問の送信機能は次の工程で追加します。</p>
   </main>
 </body>
 </html>
