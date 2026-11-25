@@ -10,6 +10,13 @@ const port: number = 3000; // ローカルで使用するポート番号
 // AI APIは既存の本文解析・静的配信より前に登録する。
 app.use('/api/ai', aiRouter);
 
+// TASK-06: /ai と /ai/ は静的HTMLを明示的に配信する。
+// APIゲートより後、express.static より前に登録し、既存ルートに影響させない。
+app.get(['/ai', '/ai/'], (_req: Request, res: Response): void => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(process.cwd(), 'public', 'ai', 'index.html'));
+});
+
 // ------------------------------
 // Expressの基本設定
 // ------------------------------
