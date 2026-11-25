@@ -24,3 +24,13 @@ button:disabled { opacity: .55; cursor: wait; }
 .history-text { white-space: pre-wrap; margin: 0; }
 .footnote { font-size: .9rem; }
 @media (max-width: 600px) { .page { margin-top: 16px; } .panel { padding: 16px; } }
+
+.ask-panel { margin-bottom: 20px; }
+#ask-form { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+#ask-form label { font-weight: 600; }
+#question-input { width: 100%; min-height: 120px; padding: 10px 12px; border: 1px solid #bec9d7; border-radius: 8px; font: inherit; resize: vertical; }
+#ask-submit { align-self: flex-start; background: #1856a2; border-color: #1856a2; color: #fff; }
+#ask-submit:hover:not(:disabled) { background: #10427f; }
+#ask-status { color: #516074; }
+.answer-section { margin-top: 14px; padding: 16px; border: 1px solid #c7d9ec; border-radius: 10px; background: #f7fbff; }
+.answer-section h3 { margin: 0 0 8px; font-size: 1rem; }
