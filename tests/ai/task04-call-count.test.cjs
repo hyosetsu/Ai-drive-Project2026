@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const ts = require('typescript');
+const { transformSync } = require('esbuild');
 
 const srcDir = path.resolve(__dirname, '../../src/apps/ai');
 const originalEnv = {
@@ -20,9 +20,12 @@ delete process.env.VERCEL_ENV;
 
 function loadTs(filename, imports) {
   const source = fs.readFileSync(path.join(srcDir, filename), 'utf8');
-  const javascript = ts.transpileModule(source, {
-    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
-  }).outputText;
+  const javascript = transformSync(source, {
+    loader: 'ts',
+    format: 'cjs',
+    target: 'es2022',
+    sourcefile: filename,
+  }).code;
   const module = { exports: {} };
   vm.runInNewContext(
     '(function(require, module, exports, process) {\n' + javascript + '\n})',
