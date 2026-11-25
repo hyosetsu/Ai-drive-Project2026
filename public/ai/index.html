@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="referrer" content="no-referrer">
+  <title>AI質問アプリ | 履歴</title>
+  <link rel="stylesheet" href="/ai/ai.css">
+  <script src="/ai/app.js" defer></script>
+</head>
+<body>
+  <main class="page">
+    <header class="page-header">
+      <nav aria-label="ページ移動">
+        <a href="/">TOP</a>
+        <a href="/todo/">TODO</a>
+      </nav>
+      <h1>AI質問アプリ</h1>
+      <p class="lead">質問と回答の履歴を確認できます。</p>
+    </header>
+
+    <section class="panel" aria-labelledby="history-heading">
+      <div class="section-heading">
+        <div>
+          <h2 id="history-heading">質問・回答の履歴</h2>
+          <p class="hint">新しい順に最大20件表示します。</p>
+        </div>
+        <button id="history-reload" type="button" disabled>再読み込み</button>
+      </div>
+
+      <p id="history-status" role="status" aria-live="polite">履歴を読み込み中...</p>
+      <p id="history-error" class="error" role="alert" hidden></p>
+      <ol id="history-list" class="history-list" aria-label="質問・回答の履歴"></ol>
+    </section>
+    <p class="footnote">質問の送信機能は次の工程で追加します。</p>
+  </main>
+</body>
+</html>
